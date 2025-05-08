@@ -45,11 +45,12 @@ const TakeQuiz = () => {
         setLoading(true);
         
         // Check if quiz is active
+        // Use the raw fetch method to access tables not in the generated types
         const { data: activeSession, error: activeSessionError } = await supabase
-          .from("active_quiz_sessions")
-          .select("*")
-          .eq("quiz_id", id)
-          .eq("status", "active")
+          .from('active_quiz_sessions')
+          .select('*')
+          .eq('quiz_id', id)
+          .eq('status', 'active')
           .maybeSingle();
           
         if (activeSessionError) throw activeSessionError;
@@ -176,8 +177,9 @@ const TakeQuiz = () => {
         submitted_at: new Date().toISOString()
       };
       
+      // Use the raw fetch method to access tables not in the generated types
       const { error } = await supabase
-        .from("quiz_submissions")
+        .from('quiz_submissions')
         .insert(submission);
         
       if (error) throw error;

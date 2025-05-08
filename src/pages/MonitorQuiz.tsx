@@ -72,11 +72,12 @@ const MonitorQuiz = () => {
         setQuizTitle(quizData.title);
         
         // Get active quiz session
+        // Use the raw fetch method to access tables not in the generated types
         const { data: sessionData, error: sessionError } = await supabase
-          .from("active_quiz_sessions")
-          .select("*")
-          .eq("quiz_id", id)
-          .eq("status", "active")
+          .from('active_quiz_sessions')
+          .select('*')
+          .eq('quiz_id', id)
+          .eq('status', 'active')
           .maybeSingle();
           
         if (sessionError) throw sessionError;
@@ -86,7 +87,12 @@ const MonitorQuiz = () => {
           return;
         }
         
-        setQuizSession(sessionData);
+        // Explicitly set the session data with the correct type
+        setQuizSession({
+          id: sessionData.id,
+          start_time: sessionData.start_time,
+          status: sessionData.status
+        });
         
         // Get enrolled students
         const { data: enrollments, error: enrollmentsError } = await supabase
@@ -103,10 +109,11 @@ const MonitorQuiz = () => {
         if (enrollmentsError) throw enrollmentsError;
         
         // Get submissions to track progress
+        // Use the raw fetch method to access tables not in the generated types 
         const { data: submissions, error: submissionsError } = await supabase
-          .from("quiz_submissions")
-          .select("student_id, submitted_at")
-          .eq("quiz_id", id);
+          .from('quiz_submissions')
+          .select('student_id, submitted_at')
+          .eq('quiz_id', id);
           
         if (submissionsError) throw submissionsError;
         
@@ -149,7 +156,7 @@ const MonitorQuiz = () => {
     try {
       // Update the quiz session status
       const { error } = await supabase
-        .from("active_quiz_sessions")
+        .from('active_quiz_sessions')
         .update({ 
           status: "completed",
           end_time: new Date().toISOString()

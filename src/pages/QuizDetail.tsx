@@ -83,10 +83,11 @@ const QuizDetail = () => {
         if (quizError) throw quizError;
 
         // Check if quiz is active
+        // Use the raw fetch method to access tables not in the generated types
         const { data: activeSessionData, error: activeSessionError } = await supabase
-          .from("active_quiz_sessions")
-          .select("*")
-          .eq("quiz_id", id)
+          .from('active_quiz_sessions')
+          .select('*')
+          .eq('quiz_id', id)
           .maybeSingle();
           
         if (activeSessionError) console.error("Error checking active sessions:", activeSessionError);
@@ -229,16 +230,15 @@ const QuizDetail = () => {
       if (!id || !currentUser) return;
       
       // Create an active quiz session
-      const { data: sessionData, error: sessionError } = await supabase
-        .from("active_quiz_sessions")
+      // Use the raw fetch method to access tables not in the generated types
+      const { error: sessionError } = await supabase
+        .from('active_quiz_sessions')
         .insert({
           quiz_id: id,
           teacher_id: currentUser.id,
           start_time: new Date().toISOString(),
           status: "active"
-        })
-        .select()
-        .single();
+        });
         
       if (sessionError) throw sessionError;
       
