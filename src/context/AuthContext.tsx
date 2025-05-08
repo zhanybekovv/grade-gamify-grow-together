@@ -139,7 +139,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         currentUser,
         session,
-        login: true,
+        login,
         signUp,
         loginWithGoogle,
         logout,
