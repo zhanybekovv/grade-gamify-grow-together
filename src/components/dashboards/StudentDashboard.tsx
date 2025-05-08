@@ -1,268 +1,266 @@
 
-import { useEffect, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Book, Award, User } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Book, FileText } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import "./styles.css";
 
 interface Subject {
   id: string;
   name: string;
   description: string;
-  quizzes_count: number;
 }
 
-interface TopStudent {
+interface Quiz {
   id: string;
-  name: string;
-  total_points: number;
+  title: string;
+  description: string;
+  subject: {
+    name: string;
+  };
 }
 
 const StudentDashboard = () => {
   const { currentUser } = useAuth();
   const [enrolledSubjects, setEnrolledSubjects] = useState<Subject[]>([]);
-  const [totalPoints, setTotalPoints] = useState(0);
-  const [pendingRequests, setPendingRequests] = useState(0);
-  const [topStudents, setTopStudents] = useState<TopStudent[]>([]);
+  const [pendingSubjects, setPendingSubjects] = useState<Subject[]>([]);
+  const [enrolledQuizzes, setEnrolledQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
-  
+  const [points, setPoints] = useState(0);
+
   useEffect(() => {
     const fetchStudentData = async () => {
-      if (!currentUser?.id) return;
-      
+      if (!currentUser) return;
+
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        // Fetch profile for total points
-        const { data: profileData, error: profileError } = await supabase
+        // Fetch student points
+        const { data: userData } = await supabase
           .from("profiles")
           .select("total_points")
           .eq("id", currentUser.id)
           .single();
-          
-        if (profileError) throw profileError;
-        
-        if (profileData) {
-          setTotalPoints(profileData.total_points || 0);
+
+        if (userData) {
+          setPoints(userData.total_points || 0);
         }
-        
-        // Get enrolled subject IDs
-        const { data: enrollments, error: enrollmentsError } = await supabase
+
+        // Fetch enrolled subjects
+        const { data: enrolledSubjectsData } = await supabase
           .from("subject_enrollments")
-          .select("subject_id")
+          .select("subject:subjects(id, name, description)")
           .eq("student_id", currentUser.id)
           .eq("status", "approved");
-        
-        if (enrollmentsError) throw enrollmentsError;
-        
-        // Fetch enrolled subjects data
-        if (enrollments && enrollments.length > 0) {
-          const subjectIds = enrollments.map(enrollment => enrollment.subject_id);
-          
-          const { data: subjects, error: subjectsError } = await supabase
-            .from("subjects")
-            .select("id, name, description")
-            .in("id", subjectIds);
-          
-          if (subjectsError) throw subjectsError;
-          
-          if (subjects) {
-            const enhancedSubjects = await Promise.all(subjects.map(async (subject) => {
-              // Get quizzes count
-              const { count: quizzesCount, error: quizzesError } = await supabase
-                .from("quizzes")
-                .select("*", { count: 'exact', head: true })
-                .eq("subject_id", subject.id);
-              
-              if (quizzesError) console.error("Error fetching quizzes:", quizzesError);
-              
-              return {
-                ...subject,
-                quizzes_count: quizzesCount || 0
-              };
-            }));
-            
-            setEnrolledSubjects(enhancedSubjects);
-          }
+
+        if (enrolledSubjectsData) {
+          setEnrolledSubjects(
+            enrolledSubjectsData.map((item) => item.subject as Subject)
+          );
         }
-        
-        // Get pending requests count (both subjects and quizzes)
-        const { count: pendingSubjects, error: pendingSubjectsError } = await supabase
+
+        // Fetch pending subjects
+        const { data: pendingSubjectsData } = await supabase
           .from("subject_enrollments")
-          .select("*", { count: 'exact', head: true })
+          .select("subject:subjects(id, name, description)")
           .eq("student_id", currentUser.id)
           .eq("status", "pending");
-        
-        if (pendingSubjectsError) throw pendingSubjectsError;
-        
-        const { count: pendingQuizzes, error: pendingQuizzesError } = await supabase
-          .from("quiz_enrollments")
-          .select("*", { count: 'exact', head: true })
-          .eq("student_id", currentUser.id)
-          .eq("status", "pending");
-        
-        if (pendingQuizzesError) throw pendingQuizzesError;
-        
-        setPendingRequests((pendingSubjects || 0) + (pendingQuizzes || 0));
-        
-        // Fetch top students by points
-        const { data: leaderboardData, error: leaderboardError } = await supabase
-          .from("profiles")
-          .select("id, name, total_points")
-          .order("total_points", { ascending: false })
-          .limit(5);
-        
-        if (leaderboardError) throw leaderboardError;
-        
-        if (leaderboardData) {
-          setTopStudents(leaderboardData);
+
+        if (pendingSubjectsData) {
+          setPendingSubjects(
+            pendingSubjectsData.map((item) => item.subject as Subject)
+          );
         }
-        
+
+        // Fetch enrolled quizzes
+        const { data: enrolledQuizzesData } = await supabase
+          .from("quiz_enrollments")
+          .select("quiz:quizzes(id, title, description, subject:subjects(name))")
+          .eq("student_id", currentUser.id)
+          .eq("status", "approved");
+
+        if (enrolledQuizzesData) {
+          setEnrolledQuizzes(
+            enrolledQuizzesData.map((item) => item.quiz as Quiz)
+          );
+        }
       } catch (error) {
-        console.error("Error fetching student data:", error);
+        console.error("Error fetching student dashboard data:", error);
         toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchStudentData();
-  }, [currentUser?.id]);
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-edu-primary"></div>
-      </div>
-    );
-  }
-  
+  }, [currentUser]);
+
+  const chartData = [
+    { name: "Subjects", value: enrolledSubjects.length, color: "#4f46e5" },
+    { name: "Quizzes", value: enrolledQuizzes.length, color: "#8b5cf6" },
+    { name: "Points", value: points / 10, color: "#06b6d4" },
+  ];
+
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-edu-primary to-edu-primary/80 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Book size={20} />
-              <span>Enrolled Subjects</span>
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              Classes you're taking
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{enrolledSubjects.length}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-edu-secondary to-edu-secondary/80 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award size={20} />
-              <span>Total Points</span>
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              Your achievement score
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{totalPoints}</p>
-          </CardContent>
-        </Card>
-        
+    <div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User size={20} className="text-edu-primary" />
-              <span>Pending Requests</span>
-            </CardTitle>
-            <CardDescription>
-              Awaiting approval
-            </CardDescription>
+          <CardHeader className="pb-2">
+            <CardTitle>My Subjects</CardTitle>
+            <CardDescription>Enrolled subjects</CardDescription>
           </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{pendingRequests}</p>
+          <CardContent className="text-3xl font-bold">
+            {loading ? "-" : enrolledSubjects.length}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              subjects
+            </span>
           </CardContent>
         </Card>
-      </section>
-      
-      <section>
-        <h2 className="text-xl font-bold mb-4">Your Classes</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {enrolledSubjects.map((subject) => (
-            <Link to={`/subjects/${subject.id}`} key={subject.id} className="block group">
-              <Card className="h-full group-hover:border-edu-primary group-hover:shadow-md transition-all">
-                <CardHeader>
-                  <CardTitle>{subject.name}</CardTitle>
-                  <CardDescription className="line-clamp-2">
-                    {subject.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                      {subject.quizzes_count} Quizzes
-                    </Badge>
-                    
-                    <div className="flex items-center gap-1.5">
-                      <Award size={16} className="text-edu-warning" />
-                      <span className="text-sm font-medium">{totalPoints} Points</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-          
-          <Link to="/subjects" className="block group">
-            <Card className="h-full border-dashed border-2 flex items-center justify-center p-6 group-hover:border-edu-primary transition-all">
-              <div className="text-center">
-                <div className="mx-auto bg-edu-gray rounded-full w-12 h-12 flex items-center justify-center mb-2 group-hover:bg-edu-primary/10">
-                  <Book size={24} className="text-edu-primary" />
-                </div>
-                <h3 className="font-medium mb-1">Explore Classes</h3>
-                <p className="text-sm text-gray-500">Find new subjects to join</p>
-              </div>
-            </Card>
-          </Link>
-        </div>
-      </section>
-      
-      <section>
-        <h2 className="text-xl font-bold mb-4">Leaderboards</h2>
+
         <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>My Quizzes</CardTitle>
+            <CardDescription>Enrolled quizzes</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {loading ? "-" : enrolledQuizzes.length}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              quizzes
+            </span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>Total Points</CardTitle>
+            <CardDescription>Your accumulated points</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold text-edu-primary">
+            {loading ? "-" : points}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              points
+            </span>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle>Top Students</CardTitle>
-            <CardDescription>Students with the highest points across all classes</CardDescription>
+            <CardTitle>Progress Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {topStudents.map((student, index) => (
-                <div key={student.id} className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className={`avatar-circle w-8 h-8 ${
-                      index === 0 ? "bg-yellow-500" : 
-                      index === 1 ? "bg-gray-400" : 
-                      index === 2 ? "bg-amber-700" : "bg-edu-primary"
-                    }`}>
-                      {index + 1}
-                    </div>
-                    <span className="font-medium">{student.name}</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Award size={16} className="text-edu-warning" />
-                    <span className="font-bold">{student.total_points} pts</span>
-                  </div>
+            <div className="h-[200px] w-full">
+              {!loading && chartData.some((d) => d.value > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      nameKey="name"
+                      label={(entry) => entry.name}
+                      labelLine={false}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">No data to display</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
-      </section>
+
+        <Card className="md:col-span-1">
+          <CardHeader>
+            <CardTitle>Recent Activity</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center items-center h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-edu-primary"></div>
+              </div>
+            ) : enrolledSubjects.length > 0 || pendingSubjects.length > 0 ? (
+              <div className="space-y-4">
+                {pendingSubjects.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 font-medium text-sm text-muted-foreground">
+                      Pending Requests
+                    </h3>
+                    <ul className="space-y-2">
+                      {pendingSubjects.slice(0, 3).map((subject) => (
+                        <li key={subject.id} className="flex items-center gap-2">
+                          <Badge className="bg-yellow-100 text-yellow-800">
+                            Pending
+                          </Badge>
+                          <span className="truncate">{subject.name}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {enrolledSubjects.length > 0 && (
+                  <div>
+                    <h3 className="mb-2 font-medium text-sm text-muted-foreground">
+                      Recent Enrollments
+                    </h3>
+                    <ul className="space-y-2">
+                      {enrolledSubjects.slice(0, 3).map((subject) => (
+                        <li
+                          key={subject.id}
+                          className="flex items-center justify-between"
+                        >
+                          <div className="flex items-center">
+                            <Book size={16} className="mr-2 text-edu-primary" />
+                            <span className="truncate">{subject.name}</span>
+                          </div>
+                          <Link to={`/subjects/${subject.id}`}>
+                            <Button size="sm" variant="ghost">
+                              View
+                            </Button>
+                          </Link>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">
+                  You haven't enrolled in any subjects yet
+                </p>
+                <Link to="/subjects">
+                  <Button>Browse Subjects</Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };

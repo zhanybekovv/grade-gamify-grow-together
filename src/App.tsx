@@ -14,6 +14,7 @@ import Subjects from "./pages/Subjects";
 import Quizzes from "./pages/Quizzes";
 import NewSubject from "./pages/NewSubject";
 import SubjectDetail from "./pages/SubjectDetail";
+import QuizDetail from "./pages/QuizDetail";
 import NewQuiz from "./pages/NewQuiz";
 import EnrollmentRequests from "./pages/EnrollmentRequests";
 
@@ -74,6 +75,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Quizzes />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quizzes/:id" 
+              element={
+                <ProtectedRoute>
+                  <QuizDetail />
                 </ProtectedRoute>
               } 
             />

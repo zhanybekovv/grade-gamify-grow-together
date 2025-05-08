@@ -51,6 +51,11 @@ const Quizzes = () => {
             const subjectIds = teacherSubjects.map(subject => subject.id);
             query = query.in("subject_id", subjectIds);
           }
+        } else if (userType === 'student' && currentUser) {
+          // For students, we could potentially show:
+          // 1. Quizzes they're enrolled in
+          // 2. Quizzes they can enroll in (from subjects they're enrolled in)
+          // For simplicity, we'll show all quizzes for now
         }
 
         const { data, error } = await query;

@@ -1,231 +1,272 @@
 
-import { useEffect, useState } from "react";
-import { useAuth } from "../../context/AuthContext";
-import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Book, Award, Users } from "lucide-react";
+import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
+import { Badge } from "@/components/ui/badge";
 import "./styles.css";
 
 interface Subject {
   id: string;
   name: string;
-  description: string;
-  students_count: number;
-  pending_students_count: number;
-  quizzes_count: number;
+}
+
+interface RequestCount {
+  subject_id: string;
+  count: number;
 }
 
 const TeacherDashboard = () => {
   const { currentUser } = useAuth();
   const [subjects, setSubjects] = useState<Subject[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<RequestCount[]>([]);
+  const [quizCount, setQuizCount] = useState(0);
+  const [studentsCount, setStudentsCount] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [totalStudents, setTotalStudents] = useState(0);
-  const [totalPendingRequests, setTotalPendingRequests] = useState(0);
-  
+
   useEffect(() => {
     const fetchTeacherData = async () => {
-      if (!currentUser?.id) return;
+      if (!currentUser) return;
       
+      setLoading(true);
       try {
-        setLoading(true);
-        
-        // Fetch subjects with student counts
+        // Fetch teacher subjects
         const { data: subjectsData, error: subjectsError } = await supabase
           .from("subjects")
-          .select(`
-            id, 
-            name, 
-            description
-          `)
+          .select("id, name")
           .eq("teacher_id", currentUser.id);
-        
+          
         if (subjectsError) throw subjectsError;
         
         if (subjectsData) {
-          const enhancedSubjects = await Promise.all(subjectsData.map(async (subject) => {
-            // Get enrolled students count
-            const { count: studentsCount, error: studentsError } = await supabase
-              .from("subject_enrollments")
-              .select("*", { count: 'exact', head: true })
-              .eq("subject_id", subject.id)
-              .eq("status", "approved");
-            
-            if (studentsError) console.error("Error fetching students:", studentsError);
-            
-            // Get pending enrollment requests count
-            const { count: pendingCount, error: pendingError } = await supabase
-              .from("subject_enrollments")
-              .select("*", { count: 'exact', head: true })
-              .eq("subject_id", subject.id)
-              .eq("status", "pending");
-            
-            if (pendingError) console.error("Error fetching pending requests:", pendingError);
-            
-            // Get quizzes count
-            const { count: quizzesCount, error: quizzesError } = await supabase
+          setSubjects(subjectsData);
+          
+          // Get subject IDs for further queries
+          const subjectIds = subjectsData.map((subject) => subject.id);
+          
+          if (subjectIds.length > 0) {
+            // Fetch quiz count for these subjects
+            const { data: quizData, error: quizError } = await supabase
               .from("quizzes")
-              .select("*", { count: 'exact', head: true })
-              .eq("subject_id", subject.id);
+              .select("id", { count: "exact" })
+              .in("subject_id", subjectIds);
+              
+            if (quizError) throw quizError;
+            setQuizCount(quizData?.length || 0);
             
-            if (quizzesError) console.error("Error fetching quizzes:", quizzesError);
-            
-            return {
-              ...subject,
-              students_count: studentsCount || 0,
-              pending_students_count: pendingCount || 0,
-              quizzes_count: quizzesCount || 0
-            };
-          }));
-          
-          setSubjects(enhancedSubjects);
-          
-          // Calculate total unique students across all subjects
-          if (enhancedSubjects.length > 0) {
-            const { data: uniqueStudents, error: uniqueError } = await supabase
+            // Fetch students count across all subjects
+            const { data: enrollmentsData, error: enrollmentsError } = await supabase
               .from("subject_enrollments")
               .select("student_id")
-              .eq("status", "approved")
-              .in("subject_id", enhancedSubjects.map(s => s.id));
+              .in("subject_id", subjectIds)
+              .eq("status", "approved");
+              
+            if (enrollmentsError) throw enrollmentsError;
             
-            if (uniqueError) throw uniqueError;
+            // Get unique student IDs
+            const uniqueStudentIds = new Set();
+            enrollmentsData?.forEach(enrollment => {
+              uniqueStudentIds.add(enrollment.student_id);
+            });
             
-            // Count unique student IDs
-            const uniqueStudentIds = new Set(uniqueStudents?.map(entry => entry.student_id));
-            setTotalStudents(uniqueStudentIds.size);
+            setStudentsCount(uniqueStudentIds.size);
+            
+            // Fetch pending enrollment requests
+            const { data: pendingData, error: pendingError } = await supabase
+              .from("subject_enrollments")
+              .select("subject_id")
+              .in("subject_id", subjectIds)
+              .eq("status", "pending");
+            
+            if (pendingError) throw pendingError;
+            
+            // Count pending requests by subject
+            const countBySubject: Record<string, number> = {};
+            pendingData?.forEach(enrollment => {
+              countBySubject[enrollment.subject_id] = (countBySubject[enrollment.subject_id] || 0) + 1;
+            });
+            
+            // Convert to array format
+            const pendingCounts = Object.keys(countBySubject).map(subject_id => ({
+              subject_id,
+              count: countBySubject[subject_id]
+            }));
+            
+            setPendingRequests(pendingCounts);
           }
-          
-          // Calculate total pending requests
-          const totalPending = enhancedSubjects.reduce(
-            (total, subject) => total + subject.pending_students_count, 0
-          );
-          setTotalPendingRequests(totalPending);
         }
       } catch (error) {
-        console.error("Error fetching teacher data:", error);
+        console.error("Error fetching teacher dashboard data:", error);
         toast.error("Failed to load dashboard data");
       } finally {
         setLoading(false);
       }
     };
-    
+
     fetchTeacherData();
-  }, [currentUser?.id]);
-  
-  if (loading) {
-    return (
-      <div className="flex justify-center items-center h-40">
-        <div className="animate-spin rounded-full h-10 w-10 border-t-2 border-b-2 border-edu-primary"></div>
-      </div>
-    );
-  }
-  
+  }, [currentUser]);
+
+  const chartData = [
+    { name: "Subjects", value: subjects.length, color: "#4f46e5" },
+    { name: "Quizzes", value: quizCount, color: "#8b5cf6" },
+    { name: "Students", value: studentsCount, color: "#06b6d4" },
+  ];
+
+  // Calculate total pending requests
+  const totalPendingRequests = pendingRequests.reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
+
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-gradient-to-br from-edu-primary to-edu-primary/80 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Book size={20} />
-              <span>Subjects</span>
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              Subjects you're teaching
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{subjects.length}</p>
-          </CardContent>
-        </Card>
-        
-        <Card className="bg-gradient-to-br from-edu-secondary to-edu-secondary/80 text-white">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Users size={20} />
-              <span>Students</span>
-            </CardTitle>
-            <CardDescription className="text-white/80">
-              Total enrolled students
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-3xl font-bold">{totalStudents}</p>
-          </CardContent>
-        </Card>
-        
+    <div>
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-6">
         <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>My Subjects</CardTitle>
+            <CardDescription>Total subjects created</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {loading ? "-" : subjects.length}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              subjects
+            </span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>My Quizzes</CardTitle>
+            <CardDescription>Total quizzes created</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {loading ? "-" : quizCount}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              quizzes
+            </span>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle>My Students</CardTitle>
+            <CardDescription>Total students enrolled</CardDescription>
+          </CardHeader>
+          <CardContent className="text-3xl font-bold">
+            {loading ? "-" : studentsCount}
+            <span className="text-sm text-muted-foreground ml-2 font-normal">
+              students
+            </span>
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card className="md:col-span-1">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Award size={20} className="text-edu-primary" />
-              <span>Pending Requests</span>
-            </CardTitle>
-            <CardDescription>
-              Student enrollment requests
-            </CardDescription>
+            <CardTitle>Overview</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex items-end justify-between">
-              <p className="text-3xl font-bold">{totalPendingRequests}</p>
-              {totalPendingRequests > 0 && (
-                <Link to="/requests" className="text-sm text-edu-primary hover:underline">
-                  View all
-                </Link>
+            <div className="h-[200px] w-full">
+              {!loading && chartData.some(d => d.value > 0) ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={chartData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={5}
+                      dataKey="value"
+                      nameKey="name"
+                      label={(entry) => entry.name}
+                      labelLine={false}
+                    >
+                      {chartData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-muted-foreground">No data to display</p>
+                </div>
               )}
             </div>
           </CardContent>
         </Card>
-      </section>
-      
-      <section>
-        <h2 className="text-xl font-bold mb-4">Your Subjects</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {subjects.map((subject) => (
-            <Link to={`/subjects/${subject.id}`} key={subject.id} className="block group">
-              <Card className="h-full group-hover:border-edu-primary group-hover:shadow-md transition-all">
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle>{subject.name}</CardTitle>
-                    <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                      {subject.quizzes_count} Quizzes
-                    </Badge>
-                  </div>
-                  <CardDescription className="line-clamp-2">
-                    {subject.description}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-1.5 text-sm text-gray-500">
-                      <Users size={16} />
-                      <span>{subject.students_count} Students</span>
-                    </div>
-                    
-                    {subject.pending_students_count > 0 && (
-                      <Badge className="bg-edu-warning text-white">
-                        {subject.pending_students_count} pending
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
-          
-          <Link to="/subjects/new" className="block group">
-            <Card className="h-full border-dashed border-2 flex items-center justify-center p-6 group-hover:border-edu-primary transition-all">
-              <div className="text-center">
-                <div className="mx-auto bg-edu-gray rounded-full w-12 h-12 flex items-center justify-center mb-2 group-hover:bg-edu-primary/10">
-                  <Book size={24} className="text-edu-primary" />
-                </div>
-                <h3 className="font-medium mb-1">Create New Subject</h3>
-                <p className="text-sm text-gray-500">Add a new course or class</p>
+
+        <Card className="md:col-span-1">
+          <CardHeader className="flex flex-row items-center justify-between">
+            <CardTitle>Enrollment Requests</CardTitle>
+            {totalPendingRequests > 0 && (
+              <Badge className="bg-edu-primary">
+                {totalPendingRequests} new
+              </Badge>
+            )}
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="flex justify-center items-center h-[200px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-edu-primary"></div>
               </div>
-            </Card>
-          </Link>
-        </div>
-      </section>
+            ) : totalPendingRequests > 0 ? (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  You have {totalPendingRequests} pending enrollment
+                  {totalPendingRequests !== 1 ? "s" : ""} to review
+                </p>
+                
+                <ul className="space-y-2">
+                  {pendingRequests.map((item) => {
+                    const subject = subjects.find(s => s.id === item.subject_id);
+                    return (
+                      <li key={item.subject_id} className="flex items-center justify-between">
+                        <div className="flex items-center">
+                          <Badge className="bg-yellow-100 text-yellow-800 mr-2">
+                            {item.count}
+                          </Badge>
+                          <span>
+                            {subject?.name || "Unknown Subject"}
+                          </span>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+                
+                <Link to="/requests" className="block mt-4">
+                  <Button className="w-full">
+                    View All Requests
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground mb-4">
+                  No pending enrollment requests
+                </p>
+                <Link to="/subjects/new">
+                  <Button>Create New Subject</Button>
+                </Link>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 };
