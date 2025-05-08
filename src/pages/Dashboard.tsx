@@ -1,4 +1,3 @@
-
 import { useAuth } from "../context/AuthContext";
 import mockDataService from "../services/mockDataService";
 import Navigation from "../components/Navigation";
@@ -273,13 +272,15 @@ const StudentDashboard = () => {
 const Dashboard = () => {
   const { currentUser } = useAuth();
   
+  const userType = currentUser.user_metadata?.type || 'student';
+  
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="container mx-auto px-4 py-6">
         <h1 className="text-2xl font-bold mb-6">Dashboard</h1>
         
-        {currentUser?.type === "teacher" ? <TeacherDashboard /> : <StudentDashboard />}
+        {userType === "teacher" ? <TeacherDashboard /> : <StudentDashboard />}
       </main>
     </div>
   );

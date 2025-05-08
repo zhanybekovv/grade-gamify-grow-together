@@ -15,6 +15,10 @@ const Navigation = () => {
 
   if (!currentUser) return null;
 
+  // Extract user information from metadata
+  const userType = currentUser.user_metadata?.type || 'student';
+  const userName = currentUser.user_metadata?.name || currentUser.email;
+
   return (
     <header className="bg-white border-b border-gray-200">
       <div className="container mx-auto px-4 py-3">
@@ -32,7 +36,7 @@ const Navigation = () => {
                 Dashboard
               </Link>
               
-              {currentUser.type === "teacher" ? (
+              {userType === "teacher" ? (
                 <>
                   <Link to="/subjects" className="text-gray-700 hover:text-edu-primary font-medium">
                     My Subjects
@@ -59,8 +63,8 @@ const Navigation = () => {
                   <User size={18} className="text-edu-primary" />
                 </div>
                 <div className="hidden sm:block">
-                  <p className="text-sm font-medium line-clamp-1">{currentUser.name}</p>
-                  <p className="text-xs text-gray-500 capitalize">{currentUser.type}</p>
+                  <p className="text-sm font-medium line-clamp-1">{userName}</p>
+                  <p className="text-xs text-gray-500 capitalize">{userType}</p>
                 </div>
               </div>
               
