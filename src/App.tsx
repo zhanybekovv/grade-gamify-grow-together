@@ -10,6 +10,10 @@ import Index from "./pages/Index";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
+import Subjects from "./pages/Subjects";
+import NewSubject from "./pages/NewSubject";
+import SubjectDetail from "./pages/SubjectDetail";
+import NewQuiz from "./pages/NewQuiz";
 
 const queryClient = new QueryClient();
 
@@ -28,6 +32,38 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Dashboard />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/subjects" 
+              element={
+                <ProtectedRoute>
+                  <Subjects />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/subjects/new" 
+              element={
+                <ProtectedRoute>
+                  <NewSubject />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/subjects/:id" 
+              element={
+                <ProtectedRoute>
+                  <SubjectDetail />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/subjects/:subjectId/quiz/new" 
+              element={
+                <ProtectedRoute>
+                  <NewQuiz />
                 </ProtectedRoute>
               } 
             />
