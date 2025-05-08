@@ -4,12 +4,20 @@ import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/context/AuthContext";
-import { Book, Plus, FileText } from "lucide-react";
+import { Book, Plus, FileText, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { 
+  Dialog, 
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
+} from "@/components/ui/dialog";
 
 interface Subject {
   id: string;
@@ -27,6 +35,12 @@ interface Quiz {
   created_at: string;
 }
 
+interface EnrollmentStatus {
+  isEnrolled: boolean;
+  isPending: boolean;
+  enrollmentId?: string;
+}
+
 const SubjectDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { currentUser } = useAuth();
@@ -35,12 +49,16 @@ const SubjectDetail = () => {
   const [quizzes, setQuizzes] = useState<Quiz[]>([]);
   const [isTeacher, setIsTeacher] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus>({
+    isEnrolled: false,
+    isPending: false
+  });
 
   useEffect(() => {
     const fetchSubjectAndQuizzes = async () => {
       setLoading(true);
       try {
-        if (!id) return;
+        if (!id || !currentUser) return;
 
         // Fetch subject details
         const { data: subjectData, error: subjectError } = await supabase
@@ -72,6 +90,24 @@ const SubjectDetail = () => {
         }
 
         setQuizzes(quizzesData || []);
+
+        // Check enrollment status for students
+        if (currentUser && !isTeacher) {
+          const { data: enrollmentData, error: enrollmentError } = await supabase
+            .from("subject_enrollments")
+            .select("*")
+            .eq("subject_id", id)
+            .eq("student_id", currentUser.id)
+            .single();
+
+          if (!enrollmentError && enrollmentData) {
+            setEnrollmentStatus({
+              isEnrolled: enrollmentData.status === 'approved',
+              isPending: enrollmentData.status === 'pending',
+              enrollmentId: enrollmentData.id
+            });
+          }
+        }
       } catch (error) {
         console.error("Error fetching subject data:", error);
         toast.error("Failed to load subject details");
@@ -81,7 +117,56 @@ const SubjectDetail = () => {
     };
 
     fetchSubjectAndQuizzes();
-  }, [id, currentUser]);
+  }, [id, currentUser, isTeacher]);
+
+  const handleEnrollRequest = async () => {
+    try {
+      if (!currentUser || !id) return;
+
+      const { error } = await supabase
+        .from("subject_enrollments")
+        .insert({
+          subject_id: id,
+          student_id: currentUser.id,
+          status: 'pending'
+        });
+
+      if (error) throw error;
+
+      setEnrollmentStatus({
+        isEnrolled: false,
+        isPending: true
+      });
+      
+      toast.success("Enrollment request sent successfully");
+    } catch (error) {
+      console.error("Error requesting enrollment:", error);
+      toast.error("Failed to send enrollment request");
+    }
+  };
+
+  const handleCancelRequest = async () => {
+    try {
+      if (!enrollmentStatus.enrollmentId) return;
+
+      const { error } = await supabase
+        .from("subject_enrollments")
+        .delete()
+        .eq("id", enrollmentStatus.enrollmentId);
+
+      if (error) throw error;
+
+      setEnrollmentStatus({
+        isEnrolled: false,
+        isPending: false
+      });
+      
+      toast.success("Enrollment request cancelled");
+    } catch (error) {
+      console.error("Error cancelling enrollment request:", error);
+      toast.error("Failed to cancel enrollment request");
+    }
+  };
 
   if (loading) {
     return (
@@ -119,14 +204,54 @@ const SubjectDetail = () => {
             <p className="text-muted-foreground">{subject.description}</p>
           </div>
           
-          {isTeacher && (
-            <Button 
-              onClick={() => navigate(`/subjects/${id}/quiz/new`)} 
-              className="self-start"
-            >
-              <Plus size={18} className="mr-2" /> Add Quiz
-            </Button>
-          )}
+          <div className="flex gap-2">
+            {!isTeacher && (
+              <>
+                {enrollmentStatus.isEnrolled ? (
+                  <Badge className="bg-green-100 text-green-800 h-10 px-4 flex items-center">
+                    <Users size={16} className="mr-2" /> Enrolled
+                  </Badge>
+                ) : enrollmentStatus.isPending ? (
+                  <Badge className="bg-yellow-100 text-yellow-800 h-10 px-4 flex items-center">
+                    Pending Approval
+                  </Badge>
+                ) : (
+                  <Dialog>
+                    <DialogTrigger asChild>
+                      <Button variant="outline">Request to Join</Button>
+                    </DialogTrigger>
+                    <DialogContent>
+                      <DialogHeader>
+                        <DialogTitle>Request to Join {subject.name}</DialogTitle>
+                        <DialogDescription>
+                          Your request will be sent to the teacher for approval.
+                        </DialogDescription>
+                      </DialogHeader>
+                      <div className="flex justify-end gap-2 mt-4">
+                        <Button variant="outline" onClick={() => {}}>Cancel</Button>
+                        <Button onClick={handleEnrollRequest}>Send Request</Button>
+                      </div>
+                    </DialogContent>
+                  </Dialog>
+                )}
+
+                {enrollmentStatus.isPending && (
+                  <Button variant="outline" onClick={handleCancelRequest}>
+                    Cancel Request
+                  </Button>
+                )}
+              </>
+            )}
+
+            {isTeacher && (
+              <Button 
+                onClick={() => navigate(`/subjects/${id}/quiz/new`)} 
+                className="self-start"
+              >
+                <Plus size={18} className="mr-2" /> Add Quiz
+              </Button>
+            )}
+          </div>
         </div>
 
         <section>

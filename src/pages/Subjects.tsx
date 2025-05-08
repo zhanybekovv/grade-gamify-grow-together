@@ -29,16 +29,14 @@ const Subjects = () => {
     const fetchSubjects = async () => {
       try {
         setLoading(true);
-        const query = supabase.from("subjects");
-        console.log('query', query);
+        let query = supabase.from("subjects").select('*');
+        
         // If user is a teacher, only show their subjects
-        // if (userType === 'teacher' && currentUser) {
-        //   query = query.eq('teacher_id', currentUser.id);
-        // }
+        if (userType === 'teacher' && currentUser) {
+          query = query.filter('teacher_id', 'eq', currentUser.id);
+        }
 
         const { data, error } = await query
-          .select('*')
-          .eq('teacher_id', currentUser.id)
           .order('created_at', { ascending: false });
 
         if (error) {

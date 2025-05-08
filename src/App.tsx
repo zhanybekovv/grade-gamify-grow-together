@@ -11,9 +11,11 @@ import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import Subjects from "./pages/Subjects";
+import Quizzes from "./pages/Quizzes";
 import NewSubject from "./pages/NewSubject";
 import SubjectDetail from "./pages/SubjectDetail";
 import NewQuiz from "./pages/NewQuiz";
+import EnrollmentRequests from "./pages/EnrollmentRequests";
 
 const queryClient = new QueryClient();
 
@@ -64,6 +66,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <NewQuiz />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quizzes" 
+              element={
+                <ProtectedRoute>
+                  <Quizzes />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/requests" 
+              element={
+                <ProtectedRoute>
+                  <EnrollmentRequests />
                 </ProtectedRoute>
               } 
             />
