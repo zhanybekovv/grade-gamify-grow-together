@@ -98,7 +98,7 @@ const QuizDetail = () => {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const questionsWithCorrectType = questionsData.map((question: any) => ({
           ...question,
-          options: question.options ? JSON.parse(question.options) : [],
+          options: [...question.options],
           points: question.points || 0
         }))
         setQuestions(questionsWithCorrectType || []);
