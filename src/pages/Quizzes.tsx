@@ -33,14 +33,27 @@ const Quizzes = () => {
       try {
         setLoading(true);
         
-        // For teachers, fetch quizzes from their subjects
-        // For students, fetch all available quizzes
-        const { data, error } = await supabase
+        let query = supabase
           .from("quizzes")
           .select(`
             *,
             subject:subjects(name)
           `);
+
+        // If the user is a teacher, only fetch quizzes from their subjects
+        if (userType === 'teacher' && currentUser) {
+          const { data: teacherSubjects } = await supabase
+            .from("subjects")
+            .select("id")
+            .eq("teacher_id", currentUser.id);
+          
+          if (teacherSubjects && teacherSubjects.length > 0) {
+            const subjectIds = teacherSubjects.map(subject => subject.id);
+            query = query.in("subject_id", subjectIds);
+          }
+        }
+
+        const { data, error } = await query;
 
         if (error) {
           throw error;
@@ -73,6 +86,14 @@ const Quizzes = () => {
                 : 'Browse and participate in quizzes'}
             </p>
           </div>
+          
+          {userType === 'teacher' && (
+            <Link to="/subjects">
+              <Button className="self-start">
+                <Plus size={18} className="mr-2" /> Create Quiz
+              </Button>
+            </Link>
+          )}
         </div>
 
         {loading ? (
@@ -91,6 +112,14 @@ const Quizzes = () => {
                   ? "You haven't created any quizzes yet" 
                   : "There are no quizzes available right now"}
               </p>
+              
+              {userType === 'teacher' && (
+                <Link to="/subjects">
+                  <Button className="mt-4">
+                    <Plus size={18} className="mr-2" /> Create Quiz
+                  </Button>
+                </Link>
+              )}
             </CardContent>
           </Card>
         ) : (
