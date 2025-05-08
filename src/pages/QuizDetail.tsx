@@ -30,6 +30,7 @@ interface Quiz {
     name: string;
     teacher_id: string;
   }
+  is_active?: boolean;
 }
 
 interface Question {
@@ -81,7 +82,20 @@ const QuizDetail = () => {
 
         if (quizError) throw quizError;
 
-        setQuiz(quizData);
+        // Check if quiz is active
+        const { data: activeSessionData, error: activeSessionError } = await supabase
+          .from("active_quiz_sessions")
+          .select("*")
+          .eq("quiz_id", id)
+          .maybeSingle();
+          
+        if (activeSessionError) console.error("Error checking active sessions:", activeSessionError);
+        
+        setQuiz({
+          ...quizData,
+          is_active: !!activeSessionData
+        });
+        setIsQuizActive(!!activeSessionData);
         
         // Check if current user is the teacher
         if (currentUser && quizData.subject.teacher_id === currentUser.id) {
@@ -93,15 +107,19 @@ const QuizDetail = () => {
           .from("questions")
           .select("*")
           .eq("quiz_id", id);
-        console.log('questionsData', questionsData);
+
         if (questionsError) throw questionsError;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const questionsWithCorrectType = questionsData.map((question: any) => ({
-          ...question,
-          options: question.options ? JSON.parse(question.options) : [],
+        
+        // Transform the questions data to match our Question interface
+        const transformedQuestions: Question[] = questionsData.map((question: any) => ({
+          id: question.id,
+          text: question.text,
+          options: Array.isArray(question.options) ? question.options : JSON.parse(question.options || '[]'),
+          correct_option_index: question.correct_option_index,
           points: question.points || 0
-        }))
-        setQuestions(questionsWithCorrectType || []);
+        }));
+        
+        setQuestions(transformedQuestions);
 
         // Check enrollment counts
         const { data: enrolledCount, error: enrolledError } = await supabase
@@ -139,11 +157,6 @@ const QuizDetail = () => {
             });
           }
         }
-
-        // Check if quiz is active
-        // For now, just a placeholder - we'd typically check a status field
-        // TODO: Add a status field to quizzes table in a future update
-        setIsQuizActive(false);
 
       } catch (error) {
         console.error("Error fetching quiz details:", error);
@@ -213,16 +226,30 @@ const QuizDetail = () => {
 
   const handleStartQuiz = async () => {
     try {
-      // TODO: Add an actual quiz status field in database
-      // For now we'll just simulate it
+      if (!id || !currentUser) return;
+      
+      // Create an active quiz session
+      const { data: sessionData, error: sessionError } = await supabase
+        .from("active_quiz_sessions")
+        .insert({
+          quiz_id: id,
+          teacher_id: currentUser.id,
+          start_time: new Date().toISOString(),
+          status: "active"
+        })
+        .select()
+        .single();
+        
+      if (sessionError) throw sessionError;
+      
+      // Update UI
       setIsQuizActive(true);
+      setQuiz(prev => prev ? { ...prev, is_active: true } : null);
       toast.success("Quiz has been started!");
       setIsConfirmStartOpen(false);
       
-      // In a real implementation, we would:
-      // 1. Update quiz status in database
-      // 2. Notify enrolled students
-      // 3. Redirect teacher to quiz monitoring page
+      // Notify enrolled students (this would typically be done via realtime updates)
+      // For now, we'll just update our UI
     } catch (error) {
       console.error("Error starting quiz:", error);
       toast.error("Failed to start quiz");
@@ -460,6 +487,29 @@ const QuizDetail = () => {
                           ? "Your enrollment request is pending approval."
                           : "Enroll to participate in this quiz."}
                       </p>
+                    </div>
+                  )}
+
+                  {isTeacher && isQuizActive && (
+                    <div className="mt-6">
+                      <Button 
+                        className="w-full"
+                        variant="outline"
+                        onClick={() => navigate(`/quizzes/${id}/monitor`)}
+                      >
+                        Monitor Quiz Progress
+                      </Button>
+                    </div>
+                  )}
+
+                  {!isTeacher && isQuizActive && enrollmentStatus.isEnrolled && (
+                    <div className="mt-6">
+                      <Button 
+                        className="w-full bg-green-600 hover:bg-green-700"
+                        onClick={() => navigate(`/quizzes/${id}/take`)}
+                      >
+                        Take Quiz Now
+                      </Button>
                     </div>
                   )}
                 </div>
