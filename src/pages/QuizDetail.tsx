@@ -93,10 +93,15 @@ const QuizDetail = () => {
           .from("questions")
           .select("*")
           .eq("quiz_id", id);
-
+        console.log('questionsData', questionsData);
         if (questionsError) throw questionsError;
-
-        setQuestions(questionsData || []);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const questionsWithCorrectType = questionsData.map((question: any) => ({
+          ...question,
+          options: question.options ? JSON.parse(question.options) : [],
+          points: question.points || 0
+        }))
+        setQuestions(questionsWithCorrectType || []);
 
         // Check enrollment counts
         const { data: enrolledCount, error: enrolledError } = await supabase
