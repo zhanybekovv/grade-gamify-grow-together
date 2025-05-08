@@ -17,6 +17,8 @@ import SubjectDetail from "./pages/SubjectDetail";
 import QuizDetail from "./pages/QuizDetail";
 import NewQuiz from "./pages/NewQuiz";
 import EnrollmentRequests from "./pages/EnrollmentRequests";
+import TakeQuiz from "./pages/TakeQuiz";
+import MonitorQuiz from "./pages/MonitorQuiz";
 
 const queryClient = new QueryClient();
 
@@ -83,6 +85,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <QuizDetail />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quizzes/:id/take" 
+              element={
+                <ProtectedRoute>
+                  <TakeQuiz />
+                </ProtectedRoute>
+              } 
+            />
+            <Route 
+              path="/quizzes/:id/monitor" 
+              element={
+                <ProtectedRoute>
+                  <MonitorQuiz />
                 </ProtectedRoute>
               } 
             />
