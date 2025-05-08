@@ -49,7 +49,7 @@ const TeacherDashboard = () => {
             // Get enrolled students count
             const { count: studentsCount, error: studentsError } = await supabase
               .from("subject_enrollments")
-              .select("*", { count: true, head: true })
+              .select("*", { count: 'exact', head: true })
               .eq("subject_id", subject.id)
               .eq("status", "approved");
             
@@ -58,7 +58,7 @@ const TeacherDashboard = () => {
             // Get pending enrollment requests count
             const { count: pendingCount, error: pendingError } = await supabase
               .from("subject_enrollments")
-              .select("*", { count: true, head: true })
+              .select("*", { count: 'exact', head: true })
               .eq("subject_id", subject.id)
               .eq("status", "pending");
             
@@ -67,7 +67,7 @@ const TeacherDashboard = () => {
             // Get quizzes count
             const { count: quizzesCount, error: quizzesError } = await supabase
               .from("quizzes")
-              .select("*", { count: true, head: true })
+              .select("*", { count: 'exact', head: true })
               .eq("subject_id", subject.id);
             
             if (quizzesError) console.error("Error fetching quizzes:", quizzesError);
