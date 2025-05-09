@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Book, FileText } from "lucide-react";
+import { Book, FileText, Play } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import "./styles.css";
 
@@ -30,6 +30,7 @@ interface Quiz {
   subject: {
     name: string;
   };
+  is_active?: boolean;
 }
 
 const StudentDashboard = () => {
@@ -39,6 +40,7 @@ const StudentDashboard = () => {
   const [enrolledQuizzes, setEnrolledQuizzes] = useState<Quiz[]>([]);
   const [loading, setLoading] = useState(true);
   const [points, setPoints] = useState(0);
+  const [activeQuizzes, setActiveQuizzes] = useState<Quiz[]>([]);
 
   useEffect(() => {
     const fetchStudentData = async () => {
@@ -91,9 +93,31 @@ const StudentDashboard = () => {
           .eq("status", "approved");
 
         if (enrolledQuizzesData) {
-          setEnrolledQuizzes(
-            enrolledQuizzesData.map((item) => item.quiz as Quiz)
-          );
+          const quizzes = enrolledQuizzesData.map((item) => item.quiz as Quiz);
+          setEnrolledQuizzes(quizzes);
+          
+          // Get enrolled quiz IDs to check for active sessions
+          const quizIds = quizzes.map(quiz => quiz.id);
+          
+          if (quizIds.length > 0) {
+            // Check which quizzes are active
+            const { data: activeQuizData, error: activeQuizError } = await supabase
+              .from('active_quiz_sessions')
+              .select('quiz_id')
+              .in('quiz_id', quizIds)
+              .eq('status', 'active');
+              
+            if (activeQuizError) throw activeQuizError;
+            
+            if (activeQuizData && activeQuizData.length > 0) {
+              const activeQuizIds = activeQuizData.map(session => session.quiz_id);
+              const activeQuizList = quizzes
+                .filter(quiz => activeQuizIds.includes(quiz.id))
+                .map(quiz => ({...quiz, is_active: true}));
+              
+              setActiveQuizzes(activeQuizList);
+            }
+          }
         }
       } catch (error) {
         console.error("Error fetching student dashboard data:", error);
@@ -104,6 +128,23 @@ const StudentDashboard = () => {
     };
 
     fetchStudentData();
+    
+    // Set up real-time listener for active quiz sessions
+    const channel = supabase
+      .channel('public:active_quiz_sessions')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'active_quiz_sessions' 
+      }, (payload) => {
+        // Refresh data when quiz sessions change
+        fetchStudentData();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [currentUser]);
 
   const chartData = [
@@ -154,6 +195,39 @@ const StudentDashboard = () => {
           </CardContent>
         </Card>
       </div>
+
+      {activeQuizzes.length > 0 && (
+        <Card className="mb-6 border-green-500">
+          <CardHeader className="bg-green-50">
+            <CardTitle className="flex items-center">
+              <Play size={20} className="mr-2 text-green-600" />
+              Active Quizzes
+            </CardTitle>
+            <CardDescription>
+              These quizzes have been started by your teachers and are ready to take
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="pt-4">
+            <div className="space-y-3">
+              {activeQuizzes.map((quiz) => (
+                <div key={quiz.id} className="flex items-center justify-between border-b pb-3">
+                  <div>
+                    <h3 className="font-medium">{quiz.title}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {quiz.subject?.name}
+                    </p>
+                  </div>
+                  <Link to={`/quizzes/${quiz.id}/take`}>
+                    <Button className="bg-green-600 hover:bg-green-700">
+                      Take Quiz Now
+                    </Button>
+                  </Link>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-6 md:grid-cols-2">
         <Card className="md:col-span-1">
