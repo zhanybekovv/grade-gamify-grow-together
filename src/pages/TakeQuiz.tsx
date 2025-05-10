@@ -200,7 +200,7 @@ const TakeQuiz = () => {
         
       if (error) throw error;
       
-      // Update student's total points
+      // Update student's total points using rpc function
       await supabase.rpc('increment_student_points', { 
         student_id: currentUser.id, 
         points_to_add: score 
@@ -267,7 +267,7 @@ const TakeQuiz = () => {
               <p className="text-lg font-medium mb-4">{currentQuestion.text}</p>
               
               <RadioGroup 
-                value={answers[currentQuestion.id]?.toString()} 
+                value={answers[currentQuestion.id]?.toString() || ""} 
                 onValueChange={(value) => handleAnswerSelect(currentQuestion.id, parseInt(value))}
                 className="space-y-3"
               >
