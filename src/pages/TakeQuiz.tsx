@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -167,13 +166,30 @@ const TakeQuiz = () => {
     try {
       setSubmitting(true);
       
-      // Here we'd calculate the score, but in a real app the scoring would happen server-side to prevent cheating
-      // For demo purposes, we'll just submit the answers
+      // Calculate score - in a production app, scoring would typically happen on the server
+      let score = 0;
       
+      // Get all correct answers
+      const { data: questionsWithAnswers, error: questionsError } = await supabase
+        .from("questions")
+        .select("id, correct_option_index, points")
+        .eq("quiz_id", id);
+        
+      if (questionsError) throw questionsError;
+      
+      // Calculate score
+      questionsWithAnswers.forEach((q: any) => {
+        if (answers[q.id] === q.correct_option_index) {
+          score += q.points;
+        }
+      });
+      
+      // Submit the quiz
       const submission = {
         quiz_id: id,
         student_id: currentUser.id,
         answers: answers,
+        score: score,
         submitted_at: new Date().toISOString()
       };
       
@@ -183,6 +199,12 @@ const TakeQuiz = () => {
         .insert(submission);
         
       if (error) throw error;
+      
+      // Update student's total points
+      await supabase.rpc('increment_student_points', { 
+        student_id: currentUser.id, 
+        points_to_add: score 
+      });
       
       toast.success("Quiz submitted successfully!");
       navigate(`/quizzes/${id}/results`);
