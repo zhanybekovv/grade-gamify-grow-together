@@ -113,15 +113,36 @@ const MonitorQuiz = () => {
           
         if (submissionsError) throw submissionsError;
         
+        // Get students who have started but not submitted the quiz (in progress)
+        const { data: inProgressData, error: inProgressError } = await supabase
+          .from('active_quiz_participation')
+          .select('student_id, status')
+          .eq('quiz_id', id)
+          .eq('status', 'in_progress');
+          
+        if (inProgressError) {
+          console.error("Error fetching in-progress students:", inProgressError);
+          // Continue execution even if this query fails
+        }
+        
         // Format student data with submission status
         const formattedStudents: Student[] = enrollments.map((enrollment: any) => {
           const studentId = enrollment.student_id;
           const submission = submissions?.find((s: any) => s.student_id === studentId);
+          const inProgress = inProgressData?.find((p: any) => p.student_id === studentId);
+          
+          let status: "not_started" | "in_progress" | "completed" = "not_started";
+          
+          if (submission) {
+            status = "completed";
+          } else if (inProgress) {
+            status = "in_progress";
+          }
           
           return {
             id: studentId,
-            name: enrollment.student_profiles.name, // Fix how we get the student name
-            status: submission ? "completed" : "not_started",
+            name: enrollment.student_profiles.name,
+            status: status,
             submission_time: submission?.submitted_at,
           };
         });
