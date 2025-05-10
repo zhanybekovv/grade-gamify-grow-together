@@ -177,7 +177,7 @@ const QuizResults = () => {
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">{quiz?.title} - Results</h1>
-          <p className="text-muted-foreground">{quiz?.subject.name}</p>
+          <p className="text-muted-foreground">{quiz?.subject?.name}</p>
         </div>
         
         <div className="grid gap-6 md:grid-cols-3 mb-6">
@@ -274,7 +274,7 @@ const QuizResults = () => {
                   </TableHeader>
                   <TableBody>
                     {questions.map((question) => {
-                      const userAnswerIndex = submission.answers[question.id];
+                      const userAnswerIndex = submission?.answers?.[question.id];
                       const isCorrect = userAnswerIndex === question.correct_option_index;
                       
                       return (
