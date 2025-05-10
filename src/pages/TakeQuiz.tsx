@@ -1,3 +1,4 @@
+
 import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,16 +36,91 @@ const TakeQuiz = () => {
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
+  const [participationId, setParticipationId] = useState<string | null>(null);
+  
+  // Record student activity when they start the quiz
+  const recordQuizStart = async () => {
+    if (!id || !currentUser?.id) return;
+    
+    try {
+      // Check if there's an existing participation record
+      const { data: existingRecord, error: checkError } = await supabase
+        .from('active_quiz_participation')
+        .select('id')
+        .eq('quiz_id', id)
+        .eq('student_id', currentUser.id)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error("Error checking participation:", checkError);
+        return;
+      }
+      
+      if (existingRecord) {
+        // Update the existing record
+        setParticipationId(existingRecord.id);
+        await supabase
+          .from('active_quiz_participation')
+          .update({ 
+            last_activity: new Date().toISOString(),
+            status: 'in_progress'
+          })
+          .eq('id', existingRecord.id);
+      } else {
+        // Create a new participation record
+        const { data, error } = await supabase
+          .from('active_quiz_participation')
+          .insert({
+            quiz_id: id,
+            student_id: currentUser.id,
+            status: 'in_progress'
+          })
+          .select('id')
+          .single();
+          
+        if (error) {
+          console.error("Error recording quiz start:", error);
+          return;
+        }
+        
+        setParticipationId(data.id);
+      }
+    } catch (error) {
+      console.error("Error recording quiz participation:", error);
+    }
+  };
+  
+  // Update the last_activity timestamp periodically
+  useEffect(() => {
+    if (!participationId) return;
+    
+    const updateActivity = async () => {
+      try {
+        await supabase
+          .from('active_quiz_participation')
+          .update({ 
+            last_activity: new Date().toISOString() 
+          })
+          .eq('id', participationId);
+      } catch (error) {
+        console.error("Error updating activity:", error);
+      }
+    };
+    
+    // Update activity every 30 seconds
+    const interval = setInterval(updateActivity, 30000);
+    
+    return () => clearInterval(interval);
+  }, [participationId]);
   
   useEffect(() => {
     const fetchQuizData = async () => {
-      if (!id || !currentUser.id) return;
+      if (!id || !currentUser?.id) return;
 
       try {
         setLoading(true);
         
         // Check if quiz is active
-        // Use the raw fetch method to access tables not in the generated types
         const { data: activeSession, error: activeSessionError } = await supabase
           .from('active_quiz_sessions')
           .select('*')
@@ -104,6 +180,9 @@ const TakeQuiz = () => {
         // Set a default quiz time limit (30 minutes)
         setTimeRemaining(30 * 60);
         
+        // Record that the student has started the quiz
+        await recordQuizStart();
+        
       } catch (error) {
         console.error("Error loading quiz:", error);
         toast.error("Failed to load quiz");
@@ -114,7 +193,7 @@ const TakeQuiz = () => {
     };
     
     fetchQuizData();
-  }, [navigate, id, currentUser.id]);
+  }, [navigate, id, currentUser?.id]);
   
   // Timer countdown effect
   useEffect(() => {
@@ -133,7 +212,7 @@ const TakeQuiz = () => {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [timeRemaining, loading, navigate]);
+  }, [timeRemaining, loading]);
   
   const formatTime = (seconds: number | null) => {
     if (seconds === null) return "--:--";
@@ -160,6 +239,21 @@ const TakeQuiz = () => {
       setCurrentQuestionIndex(prev => prev - 1);
     }
   };
+  
+  // Clean up participation record when leaving the page
+  useEffect(() => {
+    return () => {
+      // Only remove if not submitted (submission will handle this)
+      if (participationId && !submitting) {
+        supabase
+          .from('active_quiz_participation')
+          .delete()
+          .eq('id', participationId)
+          .then(() => console.log("Cleaned up participation record"))
+          .catch(error => console.error("Error cleaning up:", error));
+      }
+    };
+  }, [participationId, submitting]);
   
   const handleSubmitQuiz = useCallback(async () => {
     if (!currentUser?.id || !id || submitting) return;
@@ -194,7 +288,6 @@ const TakeQuiz = () => {
         submitted_at: new Date().toISOString()
       };
       
-      // Use the raw fetch method to access tables not in the generated types
       const { error } = await supabase
         .from('quiz_submissions')
         .insert(submission);
@@ -207,6 +300,14 @@ const TakeQuiz = () => {
         points_to_add: score 
       });
       
+      // Delete the participation record since the quiz is now submitted
+      if (participationId) {
+        await supabase
+          .from('active_quiz_participation')
+          .delete()
+          .eq('id', participationId);
+      }
+      
       toast.success("Quiz submitted successfully!");
       navigate(`/quizzes/${id}/results`);
       
@@ -216,7 +317,7 @@ const TakeQuiz = () => {
     } finally {
       setSubmitting(false);
     }
-  }, [currentUser.id, id, answers, submitting, navigate]);
+  }, [currentUser?.id, id, answers, submitting, navigate, participationId]);
   
   const currentQuestion = questions[currentQuestionIndex];
   const answeredQuestions = Object.keys(answers).length;

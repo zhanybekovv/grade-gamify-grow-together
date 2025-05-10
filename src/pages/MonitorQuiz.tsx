@@ -93,12 +93,12 @@ const MonitorQuiz = () => {
           status: sessionData.status
         });
         
-        // Get enrolled students - Fixed the query to avoid profile self-reference
+        // Get enrolled students - fixed the query to avoid profile self-reference
         const { data: enrollments, error: enrollmentsError } = await supabase
           .from("quiz_enrollments")
           .select(`
             student_id,
-            student_profiles:profiles!quiz_enrollments_student_id_fkey(name)
+            student_profiles:profiles(name)
           `)
           .eq("quiz_id", id)
           .eq("status", "approved");
