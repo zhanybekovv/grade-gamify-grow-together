@@ -1,9 +1,10 @@
-
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Provider } from "react-redux";
+import { store } from "./redux/store";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Index from "./pages/Index";
@@ -23,102 +24,104 @@ import MonitorQuiz from "./pages/MonitorQuiz";
 const queryClient = new QueryClient();
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <AuthProvider>
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <BrowserRouter>
-          <Routes>
-            <Route path="/" element={<Index />} />
-            <Route path="/login" element={<Login />} />
-            <Route 
-              path="/dashboard" 
-              element={
-                <ProtectedRoute>
-                  <Dashboard />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/subjects" 
-              element={
-                <ProtectedRoute>
-                  <Subjects />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/subjects/new" 
-              element={
-                <ProtectedRoute>
-                  <NewSubject />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/subjects/:id" 
-              element={
-                <ProtectedRoute>
-                  <SubjectDetail />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/subjects/:subjectId/quiz/new" 
-              element={
-                <ProtectedRoute>
-                  <NewQuiz />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/quizzes" 
-              element={
-                <ProtectedRoute>
-                  <Quizzes />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/quizzes/:id" 
-              element={
-                <ProtectedRoute>
-                  <QuizDetail />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/quizzes/:id/take" 
-              element={
-                <ProtectedRoute>
-                  <TakeQuiz />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/quizzes/:id/monitor" 
-              element={
-                <ProtectedRoute>
-                  <MonitorQuiz />
-                </ProtectedRoute>
-              } 
-            />
-            <Route 
-              path="/requests" 
-              element={
-                <ProtectedRoute>
-                  <EnrollmentRequests />
-                </ProtectedRoute>
-              } 
-            />
-            {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </BrowserRouter>
-      </TooltipProvider>
-    </AuthProvider>
-  </QueryClientProvider>
+  <Provider store={store}>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <TooltipProvider>
+          <Toaster />
+          <Sonner />
+          <BrowserRouter>
+            <Routes>
+              <Route path="/" element={<Index />} />
+              <Route path="/login" element={<Login />} />
+              <Route 
+                path="/dashboard" 
+                element={
+                  <ProtectedRoute>
+                    <Dashboard />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subjects" 
+                element={
+                  <ProtectedRoute>
+                    <Subjects />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subjects/new" 
+                element={
+                  <ProtectedRoute>
+                    <NewSubject />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subjects/:id" 
+                element={
+                  <ProtectedRoute>
+                    <SubjectDetail />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/subjects/:subjectId/quiz/new" 
+                element={
+                  <ProtectedRoute>
+                    <NewQuiz />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/quizzes" 
+                element={
+                  <ProtectedRoute>
+                    <Quizzes />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/quizzes/:id" 
+                element={
+                  <ProtectedRoute>
+                    <QuizDetail />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/quizzes/:id/take" 
+                element={
+                  <ProtectedRoute>
+                    <TakeQuiz />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/quizzes/:id/monitor" 
+                element={
+                  <ProtectedRoute>
+                    <MonitorQuiz />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/requests" 
+                element={
+                  <ProtectedRoute>
+                    <EnrollmentRequests />
+                  </ProtectedRoute>
+                } 
+              />
+              {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </BrowserRouter>
+        </TooltipProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </Provider>
 );
 
 export default App;

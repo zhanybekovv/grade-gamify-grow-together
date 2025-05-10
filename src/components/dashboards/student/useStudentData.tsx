@@ -1,23 +1,35 @@
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 import { Subject, Quiz } from "./types";
+import { useAppDispatch, useAppSelector } from "@/redux/hooks";
+import { 
+  setEnrolledSubjects, 
+  setPendingSubjects, 
+  setEnrolledQuizzes, 
+  setActiveQuizzes, 
+  setPoints, 
+  setLoading 
+} from "@/redux/slices/studentSlice";
 
 export const useStudentData = () => {
   const { currentUser } = useAuth();
-  const [enrolledSubjects, setEnrolledSubjects] = useState<Subject[]>([]);
-  const [pendingSubjects, setPendingSubjects] = useState<Subject[]>([]);
-  const [enrolledQuizzes, setEnrolledQuizzes] = useState<Quiz[]>([]);
-  const [activeQuizzes, setActiveQuizzes] = useState<Quiz[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [points, setPoints] = useState(0);
+  const dispatch = useAppDispatch();
+  const { 
+    enrolledSubjects, 
+    pendingSubjects, 
+    enrolledQuizzes, 
+    activeQuizzes, 
+    points, 
+    loading 
+  } = useAppSelector(state => state.student);
 
   const fetchStudentData = async () => {
     if (!currentUser) return;
 
-    setLoading(true);
+    dispatch(setLoading(true));
     try {
       // Fetch student points
       const { data: userData } = await supabase
@@ -27,7 +39,7 @@ export const useStudentData = () => {
         .single();
 
       if (userData) {
-        setPoints(userData.total_points || 0);
+        dispatch(setPoints(userData.total_points || 0));
       }
 
       // Fetch enrolled subjects
@@ -38,9 +50,9 @@ export const useStudentData = () => {
         .eq("status", "approved");
 
       if (enrolledSubjectsData) {
-        setEnrolledSubjects(
+        dispatch(setEnrolledSubjects(
           enrolledSubjectsData.map((item) => item.subject as Subject)
-        );
+        ));
       }
 
       // Fetch pending subjects
@@ -51,9 +63,9 @@ export const useStudentData = () => {
         .eq("status", "pending");
 
       if (pendingSubjectsData) {
-        setPendingSubjects(
+        dispatch(setPendingSubjects(
           pendingSubjectsData.map((item) => item.subject as Subject)
-        );
+        ));
       }
 
       // Fetch enrolled quizzes
@@ -65,7 +77,7 @@ export const useStudentData = () => {
 
       if (enrolledQuizzesData) {
         const quizzes = enrolledQuizzesData.map((item) => item.quiz as Quiz);
-        setEnrolledQuizzes(quizzes);
+        dispatch(setEnrolledQuizzes(quizzes));
         
         // Get enrolled quiz IDs to check for active sessions
         const quizIds = quizzes.map(quiz => quiz.id);
@@ -86,9 +98,9 @@ export const useStudentData = () => {
               .filter(quiz => activeQuizIds.includes(quiz.id))
               .map(quiz => ({...quiz, is_active: true}));
             
-            setActiveQuizzes(activeQuizList);
+            dispatch(setActiveQuizzes(activeQuizList));
           } else {
-            setActiveQuizzes([]);
+            dispatch(setActiveQuizzes([]));
           }
         }
       }
@@ -96,7 +108,7 @@ export const useStudentData = () => {
       console.error("Error fetching student dashboard data:", error);
       toast.error("Failed to load dashboard data");
     } finally {
-      setLoading(false);
+      dispatch(setLoading(false));
     }
   };
 
