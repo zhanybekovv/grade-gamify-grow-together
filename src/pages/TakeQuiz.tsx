@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -123,13 +122,13 @@ const TakeQuiz = () => {
     
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
-        if (prev <= 1) {
+        if (prev !== null && prev <= 1) {
           clearInterval(timer);
           // Auto-submit when time runs out
           handleSubmitQuiz();
           return 0;
         }
-        return prev - 1;
+        return prev !== null ? prev - 1 : null;
       });
     }, 1000);
     

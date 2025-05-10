@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -483,7 +482,9 @@ const QuizDetail = () => {
                     <div className="pt-4">
                       <p className="text-sm text-muted-foreground">
                         {enrollmentStatus.isEnrolled 
-                          ? "You're enrolled in this quiz! Wait for the teacher to start it."
+                          ? isQuizActive 
+                            ? "This quiz is currently active! You can take it now."
+                            : "You're enrolled in this quiz! Wait for the teacher to start it."
                           : enrollmentStatus.isPending
                           ? "Your enrollment request is pending approval."
                           : "Enroll to participate in this quiz."}

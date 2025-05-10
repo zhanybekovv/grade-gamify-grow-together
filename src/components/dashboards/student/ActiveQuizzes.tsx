@@ -36,7 +36,7 @@ const ActiveQuizzes = ({ quizzes }: ActiveQuizzesProps) => {
           Active Quizzes
         </CardTitle>
         <CardDescription>
-          These quizzes have been started by your teachers and are ready to take
+          These quizzes are currently active and ready to take
         </CardDescription>
       </CardHeader>
       <CardContent className="pt-4">
@@ -54,7 +54,7 @@ const ActiveQuizzes = ({ quizzes }: ActiveQuizzesProps) => {
               </div>
               <Link to={`/quizzes/${quiz.id}/take`}>
                 <Button className="bg-green-600 hover:bg-green-700">
-                  Take Quiz Now
+                  Take Quiz
                 </Button>
               </Link>
             </div>
