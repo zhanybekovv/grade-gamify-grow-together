@@ -94,9 +94,23 @@ export const useStudentData = () => {
           
           if (activeQuizData && activeQuizData.length > 0) {
             const activeQuizIds = activeQuizData.map(session => session.quiz_id);
-            const activeQuizList = quizzes
-              .filter(quiz => activeQuizIds.includes(quiz.id))
-              .map(quiz => ({...quiz, is_active: true}));
+            
+            // Get full quiz details for active quizzes
+            const { data: activeQuizDetails, error: detailsError } = await supabase
+              .from("quizzes")
+              .select("*, subject:subjects(name)")
+              .in("id", activeQuizIds);
+              
+            if (detailsError) throw detailsError;
+            
+            // Map to the correct format with is_active flag
+            const activeQuizList = activeQuizDetails.map(quiz => ({
+              id: quiz.id,
+              title: quiz.title,
+              description: quiz.description,
+              subject: quiz.subject,
+              is_active: true
+            }));
             
             dispatch(setActiveQuizzes(activeQuizList));
           } else {
@@ -123,6 +137,7 @@ export const useStudentData = () => {
         schema: 'public', 
         table: 'active_quiz_sessions' 
       }, (payload) => {
+        console.log('Active quiz sessions changed:', payload);
         // Refresh data when quiz sessions change
         fetchStudentData();
       })

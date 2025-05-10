@@ -16,7 +16,6 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChartContainer } from "@/components/ui/chart";
 import { Check, X, Award } from "lucide-react";
 import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
@@ -95,11 +94,13 @@ const QuizResults = () => {
         }
         
         // Parse the JSON answers if they're stored as a string
+        const parsedAnswers = typeof submissionData.answers === 'string' 
+          ? JSON.parse(submissionData.answers) 
+          : submissionData.answers;
+        
         const parsedSubmission: QuizSubmission = {
           id: submissionData.id,
-          answers: typeof submissionData.answers === 'string' 
-            ? JSON.parse(submissionData.answers) 
-            : submissionData.answers,
+          answers: parsedAnswers,
           score: submissionData.score,
           submitted_at: submissionData.submitted_at
         };
