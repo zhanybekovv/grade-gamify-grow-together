@@ -16,8 +16,9 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ChartContainer, ChartPie } from "@/components/ui/chart";
-import { Checks, X, Award } from "lucide-react";
+import { ChartContainer } from "@/components/ui/chart";
+import { Check, X, Award } from "lucide-react";
+import { PieChart, Pie, Cell, ResponsiveContainer } from "recharts";
 
 interface QuizSubmission {
   id: string;
@@ -93,7 +94,17 @@ const QuizResults = () => {
           return;
         }
         
-        setSubmission(submissionData);
+        // Parse the JSON answers if they're stored as a string
+        const parsedSubmission: QuizSubmission = {
+          id: submissionData.id,
+          answers: typeof submissionData.answers === 'string' 
+            ? JSON.parse(submissionData.answers) 
+            : submissionData.answers,
+          score: submissionData.score,
+          submitted_at: submissionData.submitted_at
+        };
+        
+        setSubmission(parsedSubmission);
         
         // Get questions
         const { data: questionsData, error: questionsError } = await supabase
@@ -144,6 +155,21 @@ const QuizResults = () => {
       </div>
     );
   }
+
+  // Calculate correct and incorrect answers for pie chart
+  const correctCount = questions.filter(q => 
+    submission?.answers?.[q.id] === q.correct_option_index
+  ).length;
+  
+  const incorrectCount = questions.filter(q => 
+    submission?.answers?.[q.id] !== undefined && 
+    submission?.answers?.[q.id] !== q.correct_option_index
+  ).length;
+  
+  const pieChartData = [
+    { name: "correct", value: correctCount, color: "#10b981" }, // green
+    { name: "incorrect", value: incorrectCount, color: "#ef4444" } // red
+  ];
   
   return (
     <div className="min-h-screen bg-gray-50">
@@ -151,7 +177,7 @@ const QuizResults = () => {
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
           <h1 className="text-2xl font-bold">{quiz?.title} - Results</h1>
-          <p className="text-muted-foreground">{quiz?.subject.name}</p>
+          <p className="text-muted-foreground">{quiz?.subject?.name}</p>
         </div>
         
         <div className="grid gap-6 md:grid-cols-3 mb-6">
@@ -197,47 +223,35 @@ const QuizResults = () => {
               </CardHeader>
               <CardContent>
                 <div className="h-[300px]">
-                  <ChartContainer
-                    config={{
-                      correct: { 
-                        label: "Correct Answers", 
-                        theme: { 
-                          light: "#10b981", 
-                          dark: "#34d399" 
-                        } 
-                      },
-                      incorrect: { 
-                        label: "Incorrect Answers", 
-                        theme: { 
-                          light: "#ef4444", 
-                          dark: "#f87171" 
-                        } 
-                      },
-                    }}
-                  >
-                    <ChartPie
-                      data={[
-                        { 
-                          name: "correct", 
-                          value: questions.filter(q => 
-                            submission.answers[q.id] === q.correct_option_index
-                          ).length 
-                        },
-                        { 
-                          name: "incorrect", 
-                          value: questions.filter(q => 
-                            submission.answers[q.id] !== undefined && 
-                            submission.answers[q.id] !== q.correct_option_index
-                          ).length 
-                        },
-                      ]}
-                      dataKey="value"
-                      nameKey="name"
-                      innerRadius={70}
-                      outerRadius={90}
-                      paddingAngle={2}
-                    />
-                  </ChartContainer>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieChartData}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        outerRadius={90}
+                        innerRadius={70}
+                        fill="#8884d8"
+                        dataKey="value"
+                        paddingAngle={2}
+                      >
+                        {pieChartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                    </PieChart>
+                  </ResponsiveContainer>
+                  <div className="flex justify-center gap-8 mt-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-green-500 rounded-sm"></div>
+                      <span>Correct ({correctCount})</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="w-4 h-4 bg-red-500 rounded-sm"></div>
+                      <span>Incorrect ({incorrectCount})</span>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -260,7 +274,7 @@ const QuizResults = () => {
                   </TableHeader>
                   <TableBody>
                     {questions.map((question) => {
-                      const userAnswerIndex = submission.answers[question.id];
+                      const userAnswerIndex = submission?.answers?.[question.id];
                       const isCorrect = userAnswerIndex === question.correct_option_index;
                       
                       return (
@@ -282,7 +296,7 @@ const QuizResults = () => {
                           <TableCell>
                             {isCorrect ? (
                               <span className="flex items-center text-green-600">
-                                <Checks className="mr-1" size={16} />
+                                <Check className="mr-1" size={16} />
                                 Correct
                               </span>
                             ) : (
