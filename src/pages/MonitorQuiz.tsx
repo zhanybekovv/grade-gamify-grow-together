@@ -72,7 +72,6 @@ const MonitorQuiz = () => {
         setQuizTitle(quizData.title);
         
         // Get active quiz session
-        // Use the raw fetch method to access tables not in the generated types
         const { data: sessionData, error: sessionError } = await supabase
           .from('active_quiz_sessions')
           .select('*')
@@ -94,14 +93,12 @@ const MonitorQuiz = () => {
           status: sessionData.status
         });
         
-        // Get enrolled students
+        // Get enrolled students - Fixed the query to avoid profile self-reference
         const { data: enrollments, error: enrollmentsError } = await supabase
           .from("quiz_enrollments")
           .select(`
-            student:student_id(
-              id,
-              name:profiles!inner(name)
-            )
+            student_id,
+            student_profiles:profiles!quiz_enrollments_student_id_fkey(name)
           `)
           .eq("quiz_id", id)
           .eq("status", "approved");
@@ -109,7 +106,6 @@ const MonitorQuiz = () => {
         if (enrollmentsError) throw enrollmentsError;
         
         // Get submissions to track progress
-        // Use the raw fetch method to access tables not in the generated types 
         const { data: submissions, error: submissionsError } = await supabase
           .from('quiz_submissions')
           .select('student_id, submitted_at')
@@ -119,12 +115,12 @@ const MonitorQuiz = () => {
         
         // Format student data with submission status
         const formattedStudents: Student[] = enrollments.map((enrollment: any) => {
-          const studentId = enrollment.student.id;
+          const studentId = enrollment.student_id;
           const submission = submissions?.find((s: any) => s.student_id === studentId);
           
           return {
             id: studentId,
-            name: enrollment.student.name.name, // Extract name from profiles
+            name: enrollment.student_profiles.name, // Fix how we get the student name
             status: submission ? "completed" : "not_started",
             submission_time: submission?.submitted_at,
           };
