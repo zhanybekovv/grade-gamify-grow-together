@@ -19,7 +19,7 @@ export const useStudentData = () => {
   } = useAppSelector(state => state.student);
 
   useEffect(() => {
-    if (!currentUser || dataFetched) return;
+    if (!currentUser?.id || dataFetched) return;
     
     // Only fetch data if not already fetched
     dispatch(fetchStudentData(currentUser.id));
@@ -32,7 +32,7 @@ export const useStudentData = () => {
         schema: 'public', 
         table: 'active_quiz_sessions' 
       }, () => {
-        if (currentUser) {
+        if (currentUser.id) {
           // Only fetch active quizzes data when changes detected
           dispatch(fetchActiveQuizzes(currentUser.id));
         }
@@ -42,7 +42,7 @@ export const useStudentData = () => {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [currentUser, dataFetched, dispatch]);
+  }, [currentUser.id, dataFetched, dispatch]);
 
   return {
     enrolledSubjects,

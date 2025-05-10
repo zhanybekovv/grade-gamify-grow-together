@@ -36,7 +36,7 @@ const TeacherDashboard = () => {
 
   useEffect(() => {
     const fetchTeacherData = async () => {
-      if (!currentUser) return;
+      if (!currentUser?.id) return;
       
       setLoading(true);
       try {
@@ -114,7 +114,7 @@ const TeacherDashboard = () => {
     };
 
     fetchTeacherData();
-  }, [currentUser]);
+  }, [currentUser.id]);
 
   const chartData = [
     { name: "Subjects", value: subjects.length, color: "#4f46e5" },

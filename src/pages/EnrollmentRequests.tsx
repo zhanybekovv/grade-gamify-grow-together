@@ -54,7 +54,7 @@ const EnrollmentRequests = () => {
 
   useEffect(() => {
     const fetchEnrollmentRequests = async () => {
-      if (!currentUser) return;
+      if (!currentUser?.id) return;
       
       try {
         setLoading(true);
@@ -99,7 +99,7 @@ const EnrollmentRequests = () => {
     };
 
     fetchEnrollmentRequests();
-  }, [currentUser]);
+  }, [currentUser.id]);
 
   const handleSubjectEnrollment = async (enrollmentId: string, approve: boolean) => {
     try {

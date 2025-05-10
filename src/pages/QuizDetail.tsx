@@ -67,7 +67,7 @@ const QuizDetail = () => {
     const fetchQuizDetails = async () => {
       setLoading(true);
       try {
-        if (!id || !currentUser) return;
+        if (!id || !currentUser?.id) return;
 
         // Fetch quiz details
         const { data: quizData, error: quizError } = await supabase
@@ -98,7 +98,7 @@ const QuizDetail = () => {
         setIsQuizActive(!!activeSessionData);
         
         // Check if current user is the teacher
-        if (currentUser && quizData.subject.teacher_id === currentUser.id) {
+        if (currentUser?.id && quizData.subject.teacher_id === currentUser.id) {
           setIsTeacher(true);
         }
 
@@ -142,7 +142,7 @@ const QuizDetail = () => {
         setPendingStudents(pendingCount?.length || 0);
 
         // Check enrollment status for students
-        if (currentUser && !isTeacher) {
+        if (currentUser?.id && !isTeacher) {
           const { data: enrollmentData, error: enrollmentError } = await supabase
             .from("quiz_enrollments")
             .select("*")
@@ -168,7 +168,7 @@ const QuizDetail = () => {
     };
 
     fetchQuizDetails();
-  }, [id, currentUser, isTeacher]);
+  }, [id, currentUser.id, isTeacher]);
 
   const handleEnrollRequest = async () => {
     try {

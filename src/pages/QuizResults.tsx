@@ -56,7 +56,7 @@ const QuizResults = () => {
   
   useEffect(() => {
     const fetchResults = async () => {
-      if (!id || !currentUser) return;
+      if (!id || !currentUser.id) return;
 
       try {
         setLoading(true);
@@ -142,7 +142,7 @@ const QuizResults = () => {
     };
     
     fetchResults();
-  }, [id, currentUser, navigate]);
+  }, [id, currentUser.id, navigate]);
   
   if (loading) {
     return (

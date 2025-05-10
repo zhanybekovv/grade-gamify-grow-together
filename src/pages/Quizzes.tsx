@@ -41,7 +41,7 @@ const Quizzes = () => {
           `);
 
         // If the user is a teacher, only fetch quizzes from their subjects
-        if (userType === 'teacher' && currentUser) {
+        if (userType === 'teacher' && currentUser?.id) {
           const { data: teacherSubjects } = await supabase
             .from("subjects")
             .select("id")
@@ -51,7 +51,7 @@ const Quizzes = () => {
             const subjectIds = teacherSubjects.map(subject => subject.id);
             query = query.in("subject_id", subjectIds);
           }
-        } else if (userType === 'student' && currentUser) {
+        } else if (userType === 'student' && currentUser?.id) {
           // For students, we could potentially show:
           // 1. Quizzes they're enrolled in
           // 2. Quizzes they can enroll in (from subjects they're enrolled in)
@@ -74,7 +74,7 @@ const Quizzes = () => {
     };
 
     fetchQuizzes();
-  }, [currentUser, userType]);
+  }, [currentUser.id, userType]);
 
   return (
     <div className="min-h-screen bg-gray-50">

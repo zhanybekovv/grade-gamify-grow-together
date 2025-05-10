@@ -47,7 +47,7 @@ const MonitorQuiz = () => {
   
   useEffect(() => {
     const fetchQuizMonitorData = async () => {
-      if (!id || !currentUser) return;
+      if (!id || !currentUser?.id) return;
       
       try {
         setLoading(true);
@@ -148,7 +148,7 @@ const MonitorQuiz = () => {
     const interval = setInterval(fetchQuizMonitorData, 10000);
     return () => clearInterval(interval);
     
-  }, [id, currentUser, navigate]);
+  }, [id, currentUser?.id, navigate]);
   
   const handleEndQuiz = async () => {
     if (!quizSession?.id) return;

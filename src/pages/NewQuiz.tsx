@@ -95,7 +95,7 @@ const NewQuiz = () => {
         setSubject(data);
 
         // Verify the current user is the teacher of this subject
-        if (currentUser && data.teacher_id !== currentUser.id) {
+        if (currentUser?.id && data.teacher_id !== currentUser.id) {
           toast.error("You don't have permission to create a quiz for this subject");
           navigate(-1);
         }
@@ -109,7 +109,7 @@ const NewQuiz = () => {
     };
 
     fetchSubject();
-  }, [subjectId, currentUser, navigate]);
+  }, [subjectId, currentUser?.id, navigate]);
 
   const openQuestionDialog = (question?: Question, index?: number) => {
     if (question) {

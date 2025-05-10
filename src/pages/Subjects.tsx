@@ -32,7 +32,7 @@ const Subjects = () => {
         let query = supabase.from("subjects").select('*');
         
         // If user is a teacher, only show their subjects
-        if (userType === 'teacher' && currentUser) {
+        if (userType === 'teacher' && currentUser?.id) {
           query = query.filter('teacher_id', 'eq', currentUser.id);
         }
 
@@ -53,7 +53,7 @@ const Subjects = () => {
     };
 
     fetchSubjects();
-  }, [currentUser, userType]);
+  }, [currentUser.id, userType]);
 
   return (
     <div className="min-h-screen bg-gray-50">

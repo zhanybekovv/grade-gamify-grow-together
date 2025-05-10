@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navigation from "@/components/Navigation";
@@ -38,7 +38,7 @@ const TakeQuiz = () => {
   
   useEffect(() => {
     const fetchQuizData = async () => {
-      if (!id || !currentUser) return;
+      if (!id || !currentUser.id) return;
 
       try {
         setLoading(true);
@@ -114,7 +114,7 @@ const TakeQuiz = () => {
     };
     
     fetchQuizData();
-  }, [id, currentUser, navigate]);
+  }, [navigate, id, currentUser.id]);
   
   // Timer countdown effect
   useEffect(() => {
@@ -133,7 +133,7 @@ const TakeQuiz = () => {
     }, 1000);
     
     return () => clearInterval(timer);
-  }, [timeRemaining, loading]);
+  }, [timeRemaining, loading, navigate]);
   
   const formatTime = (seconds: number | null) => {
     if (seconds === null) return "--:--";
@@ -161,8 +161,8 @@ const TakeQuiz = () => {
     }
   };
   
-  const handleSubmitQuiz = async () => {
-    if (!currentUser || !id || submitting) return;
+  const handleSubmitQuiz = useCallback(async () => {
+    if (!currentUser?.id || !id || submitting) return;
     
     try {
       setSubmitting(true);
@@ -216,7 +216,7 @@ const TakeQuiz = () => {
     } finally {
       setSubmitting(false);
     }
-  };
+  }, [currentUser.id, id, answers, submitting, navigate]);
   
   const currentQuestion = questions[currentQuestionIndex];
   const answeredQuestions = Object.keys(answers).length;
