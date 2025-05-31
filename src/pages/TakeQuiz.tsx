@@ -1,5 +1,5 @@
 
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navigation from "@/components/Navigation";
@@ -7,15 +7,16 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Label } from "@/components/ui/label";
+import { Progress } from "@/components/ui/progress";
 
 interface Question {
   id: string;
   text: string;
   options: string[];
+  correct_option_index: number;
   points: number;
 }
 
@@ -23,119 +24,30 @@ interface Quiz {
   id: string;
   title: string;
   description: string;
+  subject_id: string;
 }
 
 const TakeQuiz = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { currentUser } = useAuth();
-  const [loading, setLoading] = useState(true);
-  const [submitting, setSubmitting] = useState(false);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState<number | null>(null);
   const [participationId, setParticipationId] = useState<string | null>(null);
-  
-  // Record student activity when they start the quiz
-  const recordQuizStart = async () => {
-    if (!id || !currentUser?.id) return;
-    
-    try {
-      // Check if there's an existing participation record
-      const { data: existingRecord, error: checkError } = await supabase
-        .from('active_quiz_participation')
-        .select('id')
-        .eq('quiz_id', id)
-        .eq('student_id', currentUser.id)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error("Error checking participation:", checkError);
-        return;
-      }
-      
-      if (existingRecord) {
-        // Update the existing record
-        setParticipationId(existingRecord.id);
-        await supabase
-          .from('active_quiz_participation')
-          .update({ 
-            last_activity: new Date().toISOString(),
-            status: 'in_progress'
-          })
-          .eq('id', existingRecord.id);
-      } else {
-        // Create a new participation record
-        const { data, error } = await supabase
-          .from('active_quiz_participation')
-          .insert({
-            quiz_id: id,
-            student_id: currentUser.id,
-            status: 'in_progress'
-          })
-          .select('id')
-          .single();
-          
-        if (error) {
-          console.error("Error recording quiz start:", error);
-          return;
-        }
-        
-        setParticipationId(data.id);
-      }
-    } catch (error) {
-      console.error("Error recording quiz participation:", error);
-    }
-  };
-  
-  // Update the last_activity timestamp periodically
-  useEffect(() => {
-    if (!participationId) return;
-    
-    const updateActivity = async () => {
-      try {
-        await supabase
-          .from('active_quiz_participation')
-          .update({ 
-            last_activity: new Date().toISOString() 
-          })
-          .eq('id', participationId);
-      } catch (error) {
-        console.error("Error updating activity:", error);
-      }
-    };
-    
-    // Update activity every 30 seconds
-    const interval = setInterval(updateActivity, 30000);
-    
-    return () => clearInterval(interval);
-  }, [participationId]);
-  
+
   useEffect(() => {
     const fetchQuizData = async () => {
       if (!id || !currentUser?.id) return;
 
       try {
         setLoading(true);
-        
-        // Check if quiz is active
-        const { data: activeSession, error: activeSessionError } = await supabase
-          .from('active_quiz_sessions')
-          .select('*')
-          .eq('quiz_id', id)
-          .eq('status', 'active')
-          .maybeSingle();
-          
-        if (activeSessionError) throw activeSessionError;
-        if (!activeSession) {
-          toast.error("This quiz is not currently active");
-          navigate(`/quizzes/${id}`);
-          return;
-        }
-        
-        // Check if student is enrolled
+
+        // Check if user is enrolled and quiz is active
         const { data: enrollment, error: enrollmentError } = await supabase
           .from("quiz_enrollments")
           .select("*")
@@ -143,46 +55,103 @@ const TakeQuiz = () => {
           .eq("student_id", currentUser.id)
           .eq("status", "approved")
           .maybeSingle();
-          
+
         if (enrollmentError) throw enrollmentError;
+
         if (!enrollment) {
           toast.error("You are not enrolled in this quiz");
-          navigate(`/quizzes/${id}`);
+          navigate("/quizzes");
           return;
         }
-        
-        // Get quiz details
+
+        // Check if quiz has an active session
+        const { data: session, error: sessionError } = await supabase
+          .from("active_quiz_sessions")
+          .select("*")
+          .eq("quiz_id", id)
+          .eq("status", "active")
+          .maybeSingle();
+
+        if (sessionError) throw sessionError;
+
+        if (!session) {
+          toast.error("This quiz is not currently active");
+          navigate("/quizzes");
+          return;
+        }
+
+        // Check if user has already submitted
+        const { data: existingSubmission, error: submissionError } = await supabase
+          .from("quiz_submissions")
+          .select("id")
+          .eq("quiz_id", id)
+          .eq("student_id", currentUser.id)
+          .maybeSingle();
+
+        if (submissionError) throw submissionError;
+
+        if (existingSubmission) {
+          toast.error("You have already submitted this quiz");
+          navigate("/quizzes");
+          return;
+        }
+
+        // Fetch quiz details
         const { data: quizData, error: quizError } = await supabase
           .from("quizzes")
-          .select("id, title, description")
+          .select("*")
           .eq("id", id)
           .single();
-          
+
         if (quizError) throw quizError;
+
         setQuiz(quizData);
-        
-        // Get questions for this quiz
+
+        // Fetch questions
         const { data: questionsData, error: questionsError } = await supabase
           .from("questions")
-          .select("id, text, options, points")
-          .eq("quiz_id", id);
-          
+          .select("*")
+          .eq("quiz_id", id)
+          .order("created_at");
+
         if (questionsError) throw questionsError;
-        
-        // Transform question options from JSON to arrays
-        const formattedQuestions = questionsData.map((q: any) => ({
-          ...q,
-          options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]')
+
+        const formattedQuestions: Question[] = questionsData.map((q: any) => ({
+          id: q.id,
+          text: q.text,
+          options: q.options,
+          correct_option_index: q.correct_option_index,
+          points: q.points,
         }));
-        
+
         setQuestions(formattedQuestions);
-        
-        // Set a default quiz time limit (30 minutes)
-        setTimeRemaining(30 * 60);
-        
-        // Record that the student has started the quiz
-        await recordQuizStart();
-        
+
+        // Record quiz participation start
+        const { data: participationData, error: participationError } = await supabase
+          .from("active_quiz_participation")
+          .insert({
+            quiz_id: id,
+            student_id: currentUser.id,
+            status: "in_progress"
+          })
+          .select("id")
+          .single();
+
+        if (participationError) {
+          console.error("Error recording participation:", participationError);
+        } else {
+          setParticipationId(participationData.id);
+        }
+
+        // Calculate time remaining (assuming 30 minutes quiz duration)
+        const startTime = new Date(session.start_time).getTime();
+        const quizDuration = 30 * 60 * 1000; // 30 minutes in milliseconds
+        const endTime = startTime + quizDuration;
+        const now = new Date().getTime();
+        const remaining = Math.max(0, endTime - now);
+
+        setTimeRemaining(remaining);
+
       } catch (error) {
         console.error("Error loading quiz:", error);
         toast.error("Failed to load quiz");
@@ -191,137 +160,115 @@ const TakeQuiz = () => {
         setLoading(false);
       }
     };
-    
+
     fetchQuizData();
-  }, [navigate, id, currentUser?.id]);
-  
-  // Timer countdown effect
+  }, [id, currentUser?.id, navigate]);
+
+  // Timer countdown
   useEffect(() => {
-    if (timeRemaining === null || loading) return;
-    
+    if (timeRemaining === null || timeRemaining <= 0) return;
+
     const timer = setInterval(() => {
       setTimeRemaining(prev => {
-        if (prev !== null && prev <= 1) {
-          clearInterval(timer);
-          // Auto-submit when time runs out
-          handleSubmitQuiz();
+        if (prev === null || prev <= 1000) {
+          handleSubmit();
           return 0;
         }
-        return prev !== null ? prev - 1 : null;
+        return prev - 1000;
       });
     }, 1000);
-    
+
     return () => clearInterval(timer);
-  }, [timeRemaining, loading]);
-  
-  const formatTime = (seconds: number | null) => {
-    if (seconds === null) return "--:--";
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const handleAnswerSelect = (questionId: string, optionIndex: number) => {
+  }, [timeRemaining]);
+
+  // Update last activity every 30 seconds
+  useEffect(() => {
+    if (!participationId) return;
+
+    const updateActivity = async () => {
+      try {
+        await supabase
+          .from("active_quiz_participation")
+          .update({ last_activity: new Date().toISOString() })
+          .eq("id", participationId);
+      } catch (error) {
+        console.error("Error updating activity:", error);
+      }
+    };
+
+    const interval = setInterval(updateActivity, 30000);
+    return () => clearInterval(interval);
+  }, [participationId]);
+
+  const handleAnswerChange = (questionId: string, optionIndex: number) => {
     setAnswers(prev => ({
       ...prev,
       [questionId]: optionIndex
     }));
   };
-  
-  const handleNextQuestion = () => {
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex(prev => prev + 1);
-    }
-  };
-  
-  const handlePrevQuestion = () => {
-    if (currentQuestionIndex > 0) {
-      setCurrentQuestionIndex(prev => prev - 1);
-    }
-  };
-  
-  // Clean up participation record when leaving the page
-  useEffect(() => {
-    return () => {
-      // Only remove if not submitted (submission will handle this)
-      if (participationId && !submitting) {
-        supabase
-          .from('active_quiz_participation')
-          .delete()
-          .eq('id', participationId)
-          .then(() => console.log("Cleaned up participation record"))
-          .catch(error => console.error("Error cleaning up:", error));
-      }
-    };
-  }, [participationId, submitting]);
-  
-  const handleSubmitQuiz = useCallback(async () => {
-    if (!currentUser?.id || !id || submitting) return;
-    
+
+  const handleSubmit = async () => {
+    if (!quiz || !currentUser?.id || submitting) return;
+
     try {
       setSubmitting(true);
-      
-      // Calculate score - in a production app, scoring would typically happen on the server
-      let score = 0;
-      
-      // Get all correct answers
-      const { data: questionsWithAnswers, error: questionsError } = await supabase
-        .from("questions")
-        .select("id, correct_option_index, points")
-        .eq("quiz_id", id);
-        
-      if (questionsError) throw questionsError;
-      
+
       // Calculate score
-      questionsWithAnswers.forEach((q: any) => {
-        if (answers[q.id] === q.correct_option_index) {
-          score += q.points;
+      let totalScore = 0;
+      const submissionAnswers: Record<string, number> = {};
+
+      questions.forEach(question => {
+        const userAnswer = answers[question.id];
+        submissionAnswers[question.id] = userAnswer ?? -1;
+        
+        if (userAnswer === question.correct_option_index) {
+          totalScore += question.points;
         }
       });
-      
-      // Submit the quiz
-      const submission = {
-        quiz_id: id,
-        student_id: currentUser.id,
-        answers: answers,
-        score: score,
-        submitted_at: new Date().toISOString()
-      };
-      
-      const { error } = await supabase
-        .from('quiz_submissions')
-        .insert(submission);
-        
-      if (error) throw error;
-      
-      // Update student's total points using rpc function
-      await supabase.rpc('increment_student_points', { 
-        student_id: currentUser.id, 
-        points_to_add: score 
-      });
-      
-      // Delete the participation record since the quiz is now submitted
+
+      // Submit answers
+      const { error: submissionError } = await supabase
+        .from("quiz_submissions")
+        .insert({
+          quiz_id: quiz.id,
+          student_id: currentUser.id,
+          answers: submissionAnswers,
+          score: totalScore,
+        });
+
+      if (submissionError) throw submissionError;
+
+      // Remove from active participation
       if (participationId) {
-        await supabase
-          .from('active_quiz_participation')
+        const { error: participationError } = await supabase
+          .from("active_quiz_participation")
           .delete()
-          .eq('id', participationId);
+          .eq("id", participationId);
+
+        if (participationError) {
+          console.error("Error removing participation:", participationError);
+        }
       }
-      
+
       toast.success("Quiz submitted successfully!");
-      navigate(`/quizzes/${id}/results`);
-      
+      navigate("/quizzes");
+
     } catch (error) {
       console.error("Error submitting quiz:", error);
       toast.error("Failed to submit quiz");
     } finally {
       setSubmitting(false);
     }
-  }, [currentUser?.id, id, answers, submitting, navigate, participationId]);
-  
-  const currentQuestion = questions[currentQuestionIndex];
-  const answeredQuestions = Object.keys(answers).length;
-  
+  };
+
+  const formatTime = (milliseconds: number) => {
+    const minutes = Math.floor(milliseconds / 60000);
+    const seconds = Math.floor((milliseconds % 60000) / 1000);
+    return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  };
+
+  const progress = questions.length > 0 ? ((currentQuestionIndex + 1) / questions.length) * 100 : 0;
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -334,103 +281,101 @@ const TakeQuiz = () => {
       </div>
     );
   }
-  
+
+  if (!quiz || questions.length === 0) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <Navigation />
+        <main className="container mx-auto px-4 py-6">
+          <div className="text-center">
+            <h1 className="text-2xl font-bold mb-4">Quiz Not Found</h1>
+            <p className="text-muted-foreground">This quiz could not be loaded.</p>
+            <Button onClick={() => navigate("/quizzes")} className="mt-4">
+              Back to Quizzes
+            </Button>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const currentQuestion = questions[currentQuestionIndex];
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation />
-      <main className="container mx-auto px-4 py-6">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{quiz?.title}</h1>
-            <p className="text-muted-foreground">Answer all questions to complete the quiz</p>
+      <main className="container mx-auto px-4 py-6 max-w-3xl">
+        <div className="mb-6">
+          <div className="flex justify-between items-center mb-4">
+            <h1 className="text-2xl font-bold">{quiz.title}</h1>
+            {timeRemaining !== null && (
+              <div className="text-lg font-semibold text-red-600">
+                Time: {formatTime(timeRemaining)}
+              </div>
+            )}
           </div>
           
-          <div className="flex items-center gap-4">
-            <Badge className={timeRemaining && timeRemaining < 300 ? "bg-red-100 text-red-800" : "bg-blue-100 text-blue-800"}>
-              Time Remaining: {timeRemaining !== null ? formatTime(timeRemaining) : "–:–"}
-            </Badge>
-            
-            <Badge className="bg-green-100 text-green-800">
-              {answeredQuestions}/{questions.length} Answered
-            </Badge>
+          <div className="mb-4">
+            <div className="flex justify-between text-sm text-muted-foreground mb-2">
+              <span>Question {currentQuestionIndex + 1} of {questions.length}</span>
+              <span>{Math.round(progress)}% Complete</span>
+            </div>
+            <Progress value={progress} className="w-full" />
           </div>
         </div>
-        
-        {currentQuestion && (
-          <Card className="mb-6">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle>Question {currentQuestionIndex + 1} of {questions.length}</CardTitle>
-                <Badge>{currentQuestion.points} points</Badge>
-              </div>
-            </CardHeader>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Question {currentQuestionIndex + 1}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-lg mb-6">{currentQuestion.text}</p>
             
-            <CardContent>
-              <p className="text-lg font-medium mb-4">{currentQuestion.text}</p>
-              
-              <RadioGroup 
-                value={answers[currentQuestion.id]?.toString() || ""} 
-                onValueChange={(value) => handleAnswerSelect(currentQuestion.id, parseInt(value))}
-                className="space-y-3"
-              >
-                {currentQuestion.options.map((option, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={index.toString()} id={`option-${index}`} />
-                    <Label htmlFor={`option-${index}`} className="text-base">
-                      {String.fromCharCode(65 + index)}. {option}
-                    </Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </CardContent>
-            
-            <CardFooter className="flex justify-between">
-              <Button
-                variant="outline"
-                onClick={handlePrevQuestion}
-                disabled={currentQuestionIndex === 0}
-              >
-                Previous
-              </Button>
-              
-              {currentQuestionIndex < questions.length - 1 ? (
-                <Button onClick={handleNextQuestion}>
-                  Next
-                </Button>
-              ) : (
-                <Button 
-                  onClick={handleSubmitQuiz}
-                  disabled={answeredQuestions < questions.length || submitting}
-                  className="bg-green-600 hover:bg-green-700"
-                >
-                  Submit Quiz
-                </Button>
-              )}
-            </CardFooter>
-          </Card>
-        )}
-        
-        <div className="grid grid-cols-10 gap-2">
-          {questions.map((_, index) => (
-            <Button
-              key={index}
-              variant={answers[questions[index]?.id] !== undefined ? "default" : "outline"}
-              className={`h-10 w-10 p-0 ${currentQuestionIndex === index ? 'ring-2 ring-primary' : ''}`}
-              onClick={() => setCurrentQuestionIndex(index)}
+            <RadioGroup
+              value={answers[currentQuestion.id]?.toString() || ""}
+              onValueChange={(value) => handleAnswerChange(currentQuestion.id, parseInt(value))}
             >
-              {index + 1}
-            </Button>
-          ))}
-        </div>
-        
-        <div className="mt-6 flex justify-center">
+              {currentQuestion.options.map((option, index) => (
+                <div key={index} className="flex items-center space-x-2">
+                  <RadioGroupItem value={index.toString()} id={`option-${index}`} />
+                  <Label htmlFor={`option-${index}`} className="flex-1 cursor-pointer">
+                    {option}
+                  </Label>
+                </div>
+              ))}
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-between">
           <Button
-            onClick={handleSubmitQuiz}
-            disabled={answeredQuestions < questions.length || submitting}
-            className="bg-green-600 hover:bg-green-700"
+            variant="outline"
+            onClick={() => setCurrentQuestionIndex(prev => Math.max(0, prev - 1))}
+            disabled={currentQuestionIndex === 0}
           >
-            {submitting ? "Submitting..." : "Submit Quiz"}
+            Previous
           </Button>
+
+          {currentQuestionIndex === questions.length - 1 ? (
+            <Button
+              onClick={handleSubmit}
+              disabled={submitting || Object.keys(answers).length !== questions.length}
+            >
+              {submitting ? "Submitting..." : "Submit Quiz"}
+            </Button>
+          ) : (
+            <Button
+              onClick={() => setCurrentQuestionIndex(prev => Math.min(questions.length - 1, prev + 1))}
+            >
+              Next
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Answered: {Object.keys(answers).length} of {questions.length} questions
+          </p>
         </div>
       </main>
     </div>
