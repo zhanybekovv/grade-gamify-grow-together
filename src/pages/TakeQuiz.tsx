@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -47,6 +46,22 @@ const TakeQuiz = () => {
       try {
         setLoading(true);
 
+        // First, check if user has already submitted this quiz
+        const { data: existingSubmission, error: submissionError } = await supabase
+          .from("quiz_submissions")
+          .select("id")
+          .eq("quiz_id", id)
+          .eq("student_id", currentUser.id)
+          .maybeSingle();
+
+        if (submissionError) throw submissionError;
+
+        if (existingSubmission) {
+          toast.success("Quiz already completed. Redirecting to results...");
+          navigate(`/quiz-results/${id}`);
+          return;
+        }
+
         // Check if user is enrolled and quiz is active
         const { data: enrollment, error: enrollmentError } = await supabase
           .from("quiz_enrollments")
@@ -76,22 +91,6 @@ const TakeQuiz = () => {
 
         if (!session) {
           toast.error("This quiz is not currently active");
-          navigate("/quizzes");
-          return;
-        }
-
-        // Check if user has already submitted
-        const { data: existingSubmission, error: submissionError } = await supabase
-          .from("quiz_submissions")
-          .select("id")
-          .eq("quiz_id", id)
-          .eq("student_id", currentUser.id)
-          .maybeSingle();
-
-        if (submissionError) throw submissionError;
-
-        if (existingSubmission) {
-          toast.error("You have already submitted this quiz");
           navigate("/quizzes");
           return;
         }
@@ -251,7 +250,7 @@ const TakeQuiz = () => {
       }
 
       toast.success("Quiz submitted successfully!");
-      navigate("/quizzes");
+      navigate(`/quiz-results/${quiz.id}`);
 
     } catch (error) {
       console.error("Error submitting quiz:", error);
