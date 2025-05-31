@@ -53,7 +53,7 @@ const Subjects = () => {
                 .select("student_id", { count: "exact" })
                 .eq("subject_id", subject.id)
                 .eq("status", "approved");
-
+              
               if (enrollmentError) {
                 console.error("Error fetching enrollments for subject:", subject.id, enrollmentError);
                 return { ...subject, student_count: 0 };

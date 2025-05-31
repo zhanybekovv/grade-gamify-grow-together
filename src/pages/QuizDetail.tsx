@@ -51,6 +51,7 @@ const QuizDetail = () => {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
+  const [quizStatus, setQuizStatus] = useState<string>("not_started");
   const [questions, setQuestions] = useState<Question[]>([]);
   const [enrolledStudents, setEnrolledStudents] = useState<number>(0);
   const [pendingStudents, setPendingStudents] = useState<number>(0);
@@ -95,6 +96,12 @@ const QuizDetail = () => {
           ...quizData,
           is_active: !!activeSessionData
         });
+        let quizStatus = 'not_started'
+        if (activeSessionData) {
+          quizStatus = activeSessionData.status === 'active' ? 'active' : 'completed';
+        }
+
+        setQuizStatus(quizStatus);
         setIsQuizActive(!!activeSessionData);
         
         // Check if current user is the teacher
@@ -453,7 +460,8 @@ const QuizDetail = () => {
                   <div>
                     <h3 className="text-sm font-medium text-muted-foreground mb-1">Status</h3>
                     <Badge className={isQuizActive ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"}>
-                      {isQuizActive ? "Active" : "Not Started"}
+                      {quizStatus === 'active' 
+                        ? "Active" : quizStatus === 'not_started' ? "Not Started" : 'completed'}
                     </Badge>
                   </div>
                   
@@ -482,8 +490,10 @@ const QuizDetail = () => {
                     <div className="pt-4">
                       <p className="text-sm text-muted-foreground">
                         {enrollmentStatus.isEnrolled 
-                          ? isQuizActive 
+                          ? isQuizActive && quizStatus === 'active'
                             ? "This quiz is currently active! You can take it now."
+                            : isQuizActive && quizStatus === 'completed'
+                              ? "This quiz has been completed. You can review your results."
                             : "You're enrolled in this quiz! Wait for the teacher to start it."
                           : enrollmentStatus.isPending
                           ? "Your enrollment request is pending approval."
@@ -492,7 +502,7 @@ const QuizDetail = () => {
                     </div>
                   )}
 
-                  {isTeacher && isQuizActive && (
+                  {isTeacher && isQuizActive && quizStatus === 'active' && (
                     <div className="mt-6">
                       <Button 
                         className="w-full"
@@ -504,7 +514,7 @@ const QuizDetail = () => {
                     </div>
                   )}
 
-                  {!isTeacher && isQuizActive && enrollmentStatus.isEnrolled && (
+                  {!isTeacher && isQuizActive && quizStatus === 'active' && enrollmentStatus.isEnrolled && (
                     <div className="mt-6">
                       <Button 
                         className="w-full bg-green-600 hover:bg-green-700"

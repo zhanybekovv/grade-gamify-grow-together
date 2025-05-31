@@ -283,7 +283,7 @@ const SubjectDetail = () => {
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {quizzes.map((quiz) => {
-                if (enrollmentStatus.isEnrolled) {
+                if (enrollmentStatus.isEnrolled || isTeacher) {
                   return (
                     <Link to={`/quizzes/${quiz.id}`} key={quiz.id} className="block group">
                       <Card className="h-full group-hover:border-edu-primary group-hover:shadow-md transition-all">
