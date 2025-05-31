@@ -17,6 +17,7 @@ interface Subject {
   description: string;
   created_at: string;
   teacher_id: string;
+  student_count?: number;
 }
 
 const Subjects = () => {
@@ -36,14 +37,34 @@ const Subjects = () => {
           query = query.filter('teacher_id', 'eq', currentUser.id);
         }
 
-        const { data, error } = await query
+        const { data: subjectsData, error } = await query
           .order('created_at', { ascending: false });
 
         if (error) {
           throw error;
         }
 
-        setSubjects(data || []);
+        if (subjectsData) {
+          // Fetch student counts for each subject
+          const subjectsWithCounts = await Promise.all(
+            subjectsData.map(async (subject) => {
+              const { data: enrollments, error: enrollmentError } = await supabase
+                .from("subject_enrollments")
+                .select("student_id", { count: "exact" })
+                .eq("subject_id", subject.id)
+                .eq("status", "approved");
+
+              if (enrollmentError) {
+                console.error("Error fetching enrollments for subject:", subject.id, enrollmentError);
+                return { ...subject, student_count: 0 };
+              }
+
+              return { ...subject, student_count: enrollments?.length || 0 };
+            })
+          );
+
+          setSubjects(subjectsWithCounts);
+        }
       } catch (error) {
         console.error("Error fetching subjects:", error);
         toast.error("Failed to load subjects");
@@ -53,7 +74,7 @@ const Subjects = () => {
     };
 
     fetchSubjects();
-  }, [currentUser.id, userType]);
+  }, [currentUser?.id, userType]);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -121,7 +142,7 @@ const Subjects = () => {
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-1.5 text-sm text-gray-500">
                         <Users size={16} />
-                        <span>0 Students</span>
+                        <span>{subject.student_count} Student{subject.student_count !== 1 ? 's' : ''}</span>
                       </div>
                       
                       <Badge variant="outline" className="bg-edu-gray text-edu-primary">
