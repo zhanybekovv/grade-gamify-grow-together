@@ -180,7 +180,7 @@ const SubjectDetail = () => {
       </div>
     );
   }
-
+  console.log('enrollmentStatus:', enrollmentStatus);
   if (!subject) {
     return (
       <div className="min-h-screen bg-gray-50">
@@ -282,26 +282,49 @@ const SubjectDetail = () => {
             </Card>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {quizzes.map((quiz) => (
-                <Link to={`/quizzes/${quiz.id}`} key={quiz.id} className="block group">
-                  <Card className="h-full group-hover:border-edu-primary group-hover:shadow-md transition-all">
-                    <CardHeader>
-                      <CardTitle>{quiz.title}</CardTitle>
-                      <CardDescription className="line-clamp-2">
-                        {quiz.description}
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="flex items-center justify-between">
-                      <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                        Quiz
-                      </Badge>
-                      <div className="text-xs text-muted-foreground">
-                        {new Date(quiz.created_at).toLocaleDateString()}
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              ))}
+              {quizzes.map((quiz) => {
+                if (enrollmentStatus.isEnrolled) {
+                  return (
+                    <Link to={`/quizzes/${quiz.id}`} key={quiz.id} className="block group">
+                      <Card className="h-full group-hover:border-edu-primary group-hover:shadow-md transition-all">
+                        <CardHeader>
+                          <CardTitle>{quiz.title}</CardTitle>
+                          <CardDescription className="line-clamp-2">
+                            {quiz.description}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex items-center justify-between">
+                          <Badge variant="outline" className="bg-edu-gray text-edu-primary">
+                            Quiz
+                          </Badge>
+                          <div className="text-xs text-muted-foreground">
+                            {new Date(quiz.created_at).toLocaleDateString()}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </Link>
+                  )
+                } else {
+                  return (
+                    <Card key={quiz.id} className="h-full bg-gray-100 cursor-not-allowed">
+                      <CardHeader>
+                        <CardTitle>{quiz.title}</CardTitle>
+                        <CardDescription className="line-clamp-2">
+                          {quiz.description}
+                        </CardDescription>
+                      </CardHeader>
+                      <CardContent className="flex items-center justify-between">
+                        <Badge variant="outline" className="bg-edu-gray text-edu-primary">
+                          Quiz
+                        </Badge>
+                        <div className="text-xs text-muted-foreground">
+                          {new Date(quiz.created_at).toLocaleDateString()}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                }
+})}
               
               {isTeacher && (
                 <Link to={`/subjects/${id}/quiz/new`} className="block group">
