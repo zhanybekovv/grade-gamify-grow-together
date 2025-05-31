@@ -53,6 +53,9 @@ const Navigation = () => {
                   <Link to="/leaderboards" className="text-gray-700 hover:text-edu-primary font-medium">
                     Leaderboards
                   </Link>
+                   <Link to="/subjects" className="text-gray-700 hover:text-edu-primary font-medium">
+                    My Subjects
+                  </Link>
                 </>
               )}
             </nav>
