@@ -22,6 +22,7 @@ import EnrollmentRequests from "./pages/EnrollmentRequests";
 import TakeQuiz from "./pages/TakeQuiz";
 import MonitorQuiz from "./pages/MonitorQuiz";
 import QuizResults from "./pages/QuizResults";
+import Leaderboards from "./pages/Leaderboards";
 
 const queryClient = new QueryClient();
 
@@ -113,6 +114,14 @@ const App = () => (
                 element={
                   <ProtectedRoute>
                     <QuizResults />
+                  </ProtectedRoute>
+                } 
+              />
+              <Route 
+                path="/leaderboards" 
+                element={
+                  <ProtectedRoute>
+                    <Leaderboards />
                   </ProtectedRoute>
                 } 
               />
