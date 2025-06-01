@@ -117,14 +117,14 @@ const App = () => (
                   </ProtectedRoute>
                 } 
               />
-              <Route 
+              {/* <Route 
                 path="/leaderboards" 
                 element={
                   <ProtectedRoute>
                     <Leaderboards />
                   </ProtectedRoute>
                 } 
-              />
+              /> */}
               <Route 
                 path="/requests" 
                 element={

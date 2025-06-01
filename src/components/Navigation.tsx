@@ -50,9 +50,9 @@ const Navigation = () => {
                   <Link to="/explore" className="text-gray-700 hover:text-edu-primary font-medium">
                     Explore
                   </Link>
-                  <Link to="/leaderboards" className="text-gray-700 hover:text-edu-primary font-medium">
+                  {/* <Link to="/leaderboards" className="text-gray-700 hover:text-edu-primary font-medium">
                     Leaderboards
-                  </Link>
+                  </Link> */}
                    <Link to="/subjects" className="text-gray-700 hover:text-edu-primary font-medium">
                     My Subjects
                   </Link>
