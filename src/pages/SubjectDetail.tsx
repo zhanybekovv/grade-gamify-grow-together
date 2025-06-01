@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -33,6 +32,7 @@ interface Quiz {
   description: string;
   subject_id: string;
   created_at: string;
+  status?: 'completed' | 'active' | 'not_started';
 }
 
 interface EnrollmentStatus {
@@ -53,6 +53,8 @@ const SubjectDetail = () => {
     isEnrolled: false,
     isPending: false
   });
+
+  const userType = currentUser?.user_metadata?.type || 'student';
 
   useEffect(() => {
     const fetchSubjectAndQuizzes = async () => {
@@ -89,7 +91,42 @@ const SubjectDetail = () => {
           throw quizzesError;
         }
 
-        setQuizzes(quizzesData || []);
+        let quizzesWithStatus = quizzesData || [];
+
+        // For students, get quiz statuses
+        if (userType === 'student' && currentUser?.id && quizzesData?.length > 0) {
+          const quizIds = quizzesData.map(quiz => quiz.id);
+
+          // Get completed quizzes
+          const { data: submissions } = await supabase
+            .from("quiz_submissions")
+            .select("quiz_id")
+            .eq("student_id", currentUser.id)
+            .in("quiz_id", quizIds);
+
+          const completedQuizIds = submissions?.map(sub => sub.quiz_id) || [];
+
+          // Get active quiz sessions
+          const { data: activeSessions } = await supabase
+            .from("active_quiz_sessions")
+            .select("quiz_id")
+            .eq("status", "active")
+            .in("quiz_id", quizIds);
+
+          const activeQuizIds = activeSessions?.map(session => session.quiz_id) || [];
+
+          // Add status to each quiz
+          quizzesWithStatus = quizzesData.map(quiz => ({
+            ...quiz,
+            status: completedQuizIds.includes(quiz.id) 
+              ? 'completed' as const
+              : activeQuizIds.includes(quiz.id)
+              ? 'active' as const
+              : 'not_started' as const
+          }));
+        }
+
+        setQuizzes(quizzesWithStatus);
 
         // Check enrollment status for students
         if (currentUser && !isTeacher) {
@@ -117,7 +154,36 @@ const SubjectDetail = () => {
     };
 
     fetchSubjectAndQuizzes();
-  }, [id, currentUser, isTeacher]);
+  }, [id, currentUser, isTeacher, userType]);
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'completed':
+        return (
+          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+            Completed
+          </Badge>
+        );
+      case 'active':
+        return (
+          <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+            Active
+          </Badge>
+        );
+      case 'not_started':
+        return (
+          <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
+            Not Started
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="bg-edu-gray text-edu-primary">
+            Quiz
+          </Badge>
+        );
+    }
+  };
 
   const handleEnrollRequest = async () => {
     try {
@@ -294,12 +360,10 @@ const SubjectDetail = () => {
                           </CardDescription>
                         </CardHeader>
                         <CardContent className="flex items-center justify-between">
-                          <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                            Quiz
-                          </Badge>
                           <div className="text-xs text-muted-foreground">
                             {new Date(quiz.created_at).toLocaleDateString()}
                           </div>
+                          {getStatusBadge(quiz.status)}
                         </CardContent>
                       </Card>
                     </Link>
@@ -314,17 +378,15 @@ const SubjectDetail = () => {
                         </CardDescription>
                       </CardHeader>
                       <CardContent className="flex items-center justify-between">
-                        <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                          Quiz
-                        </Badge>
                         <div className="text-xs text-muted-foreground">
                           {new Date(quiz.created_at).toLocaleDateString()}
                         </div>
+                        {getStatusBadge(quiz.status)}
                       </CardContent>
                     </Card>
                   );
                 }
-})}
+              })}
               
               {isTeacher && (
                 <Link to={`/subjects/${id}/quiz/new`} className="block group">

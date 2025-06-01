@@ -6,18 +6,8 @@ import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Trophy, Medal, Award } from "lucide-react";
-
-interface QuizLeaderboardEntry {
-  student_name: string;
-  student_id: string;
-  score: number;
-  submitted_at: string;
-  quiz_title: string;
-  quiz_id: string;
-}
 
 interface SubjectLeaderboardEntry {
   student_name: string;
@@ -32,7 +22,6 @@ interface SubjectLeaderboardEntry {
 const Leaderboards = () => {
   const { currentUser } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [quizLeaderboards, setQuizLeaderboards] = useState<QuizLeaderboardEntry[]>([]);
   const [subjectLeaderboards, setSubjectLeaderboards] = useState<SubjectLeaderboardEntry[]>([]);
 
   useEffect(() => {
@@ -42,7 +31,7 @@ const Leaderboards = () => {
       try {
         setLoading(true);
 
-        // Fetch quiz leaderboards - top scores for each quiz
+        // Fetch quiz submissions to calculate subject leaderboards
         const { data: quizData, error: quizError } = await supabase
           .from("quiz_submissions")
           .select(`
@@ -65,31 +54,7 @@ const Leaderboards = () => {
 
         if (quizError) throw quizError;
 
-        // Process quiz data to get best score per student per quiz
-        const quizLeaderboardMap = new Map<string, QuizLeaderboardEntry>();
-        
-        quizData?.forEach((submission: any) => {
-          const key = `${submission.quiz_id}-${submission.student_id}`;
-          const existing = quizLeaderboardMap.get(key);
-          
-          if (!existing || submission.score > existing.score) {
-            quizLeaderboardMap.set(key, {
-              student_name: submission.profiles.name,
-              student_id: submission.student_id,
-              score: submission.score || 0,
-              submitted_at: submission.submitted_at,
-              quiz_title: submission.quizzes.title,
-              quiz_id: submission.quiz_id,
-            });
-          }
-        });
-
-        const processedQuizData = Array.from(quizLeaderboardMap.values())
-          .sort((a, b) => b.score - a.score);
-
-        setQuizLeaderboards(processedQuizData);
-
-        // Fetch subject leaderboards - aggregate scores by subject
+        // Aggregate scores by subject
         const subjectMap = new Map<string, Map<string, { total: number; count: number; name: string; subjectName: string; subjectId: string }>>();
 
         quizData?.forEach((submission: any) => {
@@ -193,109 +158,56 @@ const Leaderboards = () => {
       <Navigation />
       <main className="container mx-auto px-4 py-6">
         <div className="mb-6">
-          <h1 className="text-3xl font-bold text-gray-900">Leaderboards</h1>
-          <p className="text-gray-600 mt-2">See how you rank against other students</p>
+          <h1 className="text-3xl font-bold text-gray-900">Subject Leaderboards</h1>
+          <p className="text-gray-600 mt-2">See how you rank in each subject</p>
         </div>
 
-        <Tabs defaultValue="quiz" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="quiz">Quiz Leaderboards</TabsTrigger>
-            <TabsTrigger value="subject">Subject Leaderboards</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="quiz" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Quiz Scores</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {quizLeaderboards.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No quiz submissions yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {quizLeaderboards.slice(0, 20).map((entry, index) => (
-                      <div
-                        key={`${entry.quiz_id}-${entry.student_id}`}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${
-                          entry.student_id === currentUser?.id 
-                            ? 'bg-blue-50 border-blue-200' 
-                            : 'bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {getRankIcon(index)}
-                          <div>
-                            <p className="font-medium">{entry.student_name}</p>
-                            <p className="text-sm text-gray-500">{entry.quiz_title}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={getRankBadgeVariant(index)}>
-                            {entry.score} points
-                          </Badge>
-                          {entry.student_id === currentUser?.id && (
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                              You
-                            </Badge>
-                          )}
-                        </div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Subject Rankings</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {subjectLeaderboards.length === 0 ? (
+              <p className="text-gray-500 text-center py-8">No subject data available</p>
+            ) : (
+              <div className="space-y-3">
+                {subjectLeaderboards.slice(0, 20).map((entry, index) => (
+                  <div
+                    key={`${entry.subject_id}-${entry.student_id}`}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      entry.student_id === currentUser?.id 
+                        ? 'bg-blue-50 border-blue-200' 
+                        : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {getRankIcon(index)}
+                      <div>
+                        <p className="font-medium">{entry.student_name}</p>
+                        <p className="text-sm text-gray-500">{entry.subject_name}</p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="subject" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Subject Rankings</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {subjectLeaderboards.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No subject data available</p>
-                ) : (
-                  <div className="space-y-3">
-                    {subjectLeaderboards.slice(0, 20).map((entry, index) => (
-                      <div
-                        key={`${entry.subject_id}-${entry.student_id}`}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${
-                          entry.student_id === currentUser?.id 
-                            ? 'bg-blue-50 border-blue-200' 
-                            : 'bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {getRankIcon(index)}
-                          <div>
-                            <p className="font-medium">{entry.student_name}</p>
-                            <p className="text-sm text-gray-500">{entry.subject_name}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <div className="text-right">
-                            <Badge variant={getRankBadgeVariant(index)}>
-                              {entry.total_score} total
-                            </Badge>
-                            <p className="text-xs text-gray-500 mt-1">
-                              {entry.quiz_count} quizzes • Avg: {entry.average_score}
-                            </p>
-                          </div>
-                          {entry.student_id === currentUser?.id && (
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                              You
-                            </Badge>
-                          )}
-                        </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div className="text-right">
+                        <Badge variant={getRankBadgeVariant(index)}>
+                          {entry.total_score} total
+                        </Badge>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {entry.quiz_count} quizzes • Avg: {entry.average_score}
+                        </p>
                       </div>
-                    ))}
+                      {entry.student_id === currentUser?.id && (
+                        <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                          You
+                        </Badge>
+                      )}
+                    </div>
                   </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </main>
     </div>
   );
