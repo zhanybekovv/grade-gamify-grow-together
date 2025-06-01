@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -15,7 +14,7 @@ import {
   DialogTitle,
   DialogTrigger
 } from "@/components/ui/dialog";
-import { Play, Clock, Users, Award, Trophy, Medal } from "lucide-react";
+import { Play, Clock, Users, Award, Trophy, Medal, UserPlus } from "lucide-react";
 import { toast } from "sonner";
 
 interface Quiz {
@@ -43,6 +42,11 @@ interface EnrollmentStatus {
   isPending: boolean;
 }
 
+interface QuizEnrollmentStatus {
+  isEnrolled: boolean;
+  isPending: boolean;
+}
+
 interface LeaderboardEntry {
   student_name: string;
   student_id: string;
@@ -61,6 +65,10 @@ const QuizDetail = () => {
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [submissionScore, setSubmissionScore] = useState<number | null>(null);
   const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus>({
+    isEnrolled: false,
+    isPending: false
+  });
+  const [quizEnrollmentStatus, setQuizEnrollmentStatus] = useState<QuizEnrollmentStatus>({
     isEnrolled: false,
     isPending: false
   });
@@ -123,7 +131,7 @@ const QuizDetail = () => {
             setSubmissionScore(submissionData.score);
           }
 
-          // Check enrollment status
+          // Check subject enrollment status
           const { data: enrollmentData } = await supabase
             .from("subject_enrollments")
             .select("status")
@@ -135,6 +143,21 @@ const QuizDetail = () => {
             setEnrollmentStatus({
               isEnrolled: enrollmentData.status === 'approved',
               isPending: enrollmentData.status === 'pending'
+            });
+          }
+
+          // Check quiz enrollment status
+          const { data: quizEnrollmentData } = await supabase
+            .from("quiz_enrollments")
+            .select("status")
+            .eq("quiz_id", id)
+            .eq("student_id", currentUser.id)
+            .maybeSingle();
+
+          if (quizEnrollmentData) {
+            setQuizEnrollmentStatus({
+              isEnrolled: quizEnrollmentData.status === 'approved',
+              isPending: quizEnrollmentData.status === 'pending'
             });
           }
         }
@@ -232,6 +255,26 @@ const QuizDetail = () => {
     }
   };
 
+  const requestQuizEnrollment = async () => {
+    try {
+      const { error } = await supabase
+        .from("quiz_enrollments")
+        .insert({
+          quiz_id: id,
+          student_id: currentUser?.id,
+          status: "pending"
+        });
+
+      if (error) throw error;
+
+      toast.success("Quiz enrollment request sent successfully");
+      setQuizEnrollmentStatus({ isEnrolled: false, isPending: true });
+    } catch (error) {
+      console.error("Error requesting quiz enrollment:", error);
+      toast.error("Failed to send quiz enrollment request");
+    }
+  };
+
   const getRankIcon = (index: number) => {
     switch (index) {
       case 0:
@@ -270,6 +313,10 @@ const QuizDetail = () => {
       </div>
     );
   }
+
+  // Determine if student can access quiz
+  const canAccessQuiz = enrollmentStatus.isEnrolled || quizEnrollmentStatus.isEnrolled;
+  const hasAnyEnrollmentRequest = enrollmentStatus.isPending || quizEnrollmentStatus.isPending;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -361,14 +408,37 @@ const QuizDetail = () => {
                 </>
               ) : (
                 <>
-                  {!enrollmentStatus.isEnrolled ? (
-                    <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="text-sm text-yellow-800">
-                        {enrollmentStatus.isPending 
-                          ? "Your enrollment request is pending approval"
-                          : "You need to be enrolled in this subject to take the quiz"
-                        }
-                      </p>
+                  {!canAccessQuiz ? (
+                    <div className="space-y-3">
+                      {!hasAnyEnrollmentRequest ? (
+                        <>
+                          <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                            <p className="text-sm text-yellow-800 mb-2">
+                              You need to be enrolled to take this quiz
+                            </p>
+                            <p className="text-xs text-yellow-700">
+                              You can either join the subject or request access to just this quiz
+                            </p>
+                          </div>
+                          <Button 
+                            onClick={requestQuizEnrollment}
+                            variant="outline" 
+                            className="w-full"
+                          >
+                            <UserPlus size={18} className="mr-2" />
+                            Request Quiz Access
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="text-center p-4 bg-blue-50 rounded-lg border border-blue-200">
+                          <p className="text-sm text-blue-800">
+                            {enrollmentStatus.isPending 
+                              ? "Your subject enrollment request is pending approval"
+                              : "Your quiz enrollment request is pending approval"
+                            }
+                          </p>
+                        </div>
+                      )}
                     </div>
                   ) : !activeSession ? (
                     <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
