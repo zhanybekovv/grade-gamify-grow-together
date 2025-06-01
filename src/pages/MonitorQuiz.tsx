@@ -171,11 +171,11 @@ const MonitorQuiz = () => {
     if (!quizSession?.id) return;
     
     try {
-      // Update the quiz session status
+      // Update the quiz session status to "ended" instead of "completed"
       const { error } = await supabase
         .from('active_quiz_sessions')
         .update({ 
-          status: "completed",
+          status: "ended",
           end_time: new Date().toISOString()
         })
         .eq("id", quizSession.id);
