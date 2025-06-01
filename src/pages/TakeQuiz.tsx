@@ -58,7 +58,7 @@ const TakeQuiz = () => {
 
         if (existingSubmission) {
           toast.success("Quiz already completed. Redirecting to results...");
-          navigate(`/quiz-results/${id}`);
+          navigate(`/quizzes/${id}/results`);
           return;
         }
 

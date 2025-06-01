@@ -80,6 +80,21 @@ const QuizDetail = () => {
           .eq("id", id)
           .single();
 
+        const { data: existingSubmission, error: submissionError } = await supabase
+          .from("quiz_submissions")
+          .select("id")
+          .eq("quiz_id", id)
+          .eq("student_id", currentUser.id)
+          .maybeSingle();
+
+        if (submissionError) throw submissionError;
+
+        if (existingSubmission) {
+          toast.success("Quiz already completed. Redirecting to results...");
+          navigate(`/quizzes/${id}/results`);
+          return;
+        }
+
         if (quizError) throw quizError;
 
         // Check if quiz is active
