@@ -141,27 +141,41 @@ const QuizResults = () => {
           setScorePercentage(Math.round((submissionData.score / totalPossiblePoints) * 100));
         }
 
-        // Fetch leaderboard data
-        const { data: leaderboardData, error: leaderboardError } = await supabase
+        // Fetch leaderboard data with a separate query for profiles
+        const { data: submissionsData, error: submissionsError } = await supabase
           .from("quiz_submissions")
-          .select(`
-            score,
-            submitted_at,
-            student_id,
-            profiles!inner(name)
-          `)
+          .select("score, submitted_at, student_id")
           .eq("quiz_id", id)
           .order("score", { ascending: false })
           .limit(10);
 
-        if (!leaderboardError && leaderboardData) {
-          const formattedLeaderboard = leaderboardData.map((entry: any) => ({
-            student_name: entry.profiles.name,
-            student_id: entry.student_id,
-            score: entry.score,
-            submitted_at: entry.submitted_at
-          }));
-          setLeaderboard(formattedLeaderboard);
+        if (submissionsError) {
+          console.error("Error fetching submissions:", submissionsError);
+        } else if (submissionsData && submissionsData.length > 0) {
+          // Get student IDs
+          const studentIds = submissionsData.map(sub => sub.student_id);
+          
+          // Fetch profiles separately
+          const { data: profilesData, error: profilesError } = await supabase
+            .from("profiles")
+            .select("id, name")
+            .in("id", studentIds);
+
+          if (!profilesError && profilesData) {
+            // Combine the data
+            const formattedLeaderboard = submissionsData.map((submission: any) => {
+              const profile = profilesData.find(p => p.id === submission.student_id);
+              return {
+                student_name: profile?.name || 'Unknown Student',
+                student_id: submission.student_id,
+                score: submission.score,
+                submitted_at: submission.submitted_at
+              };
+            });
+            setLeaderboard(formattedLeaderboard);
+          } else {
+            console.error("Error fetching profiles:", profilesError);
+          }
         }
         
       } catch (error) {
