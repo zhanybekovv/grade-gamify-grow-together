@@ -19,7 +19,8 @@ interface Quiz {
   created_at: string;
   subject: {
     name: string;
-  }
+  };
+  status?: 'completed' | 'active' | 'not_started';
 }
 
 const Quizzes = () => {
@@ -51,20 +52,50 @@ const Quizzes = () => {
             const subjectIds = teacherSubjects.map(subject => subject.id);
             query = query.in("subject_id", subjectIds);
           }
-        } else if (userType === 'student' && currentUser?.id) {
-          // For students, we could potentially show:
-          // 1. Quizzes they're enrolled in
-          // 2. Quizzes they can enroll in (from subjects they're enrolled in)
-          // For simplicity, we'll show all quizzes for now
         }
 
-        const { data, error } = await query;
+        const { data: quizzesData, error } = await query;
 
         if (error) {
           throw error;
         }
 
-        setQuizzes(data || []);
+        let quizzesWithStatus = quizzesData || [];
+
+        // For students, get quiz statuses
+        if (userType === 'student' && currentUser?.id && quizzesData?.length > 0) {
+          const quizIds = quizzesData.map(quiz => quiz.id);
+
+          // Get completed quizzes
+          const { data: submissions } = await supabase
+            .from("quiz_submissions")
+            .select("quiz_id")
+            .eq("student_id", currentUser.id)
+            .in("quiz_id", quizIds);
+
+          const completedQuizIds = submissions?.map(sub => sub.quiz_id) || [];
+
+          // Get active quiz sessions
+          const { data: activeSessions } = await supabase
+            .from("active_quiz_sessions")
+            .select("quiz_id")
+            .eq("status", "active")
+            .in("quiz_id", quizIds);
+
+          const activeQuizIds = activeSessions?.map(session => session.quiz_id) || [];
+
+          // Add status to each quiz
+          quizzesWithStatus = quizzesData.map(quiz => ({
+            ...quiz,
+            status: completedQuizIds.includes(quiz.id) 
+              ? 'completed' as const
+              : activeQuizIds.includes(quiz.id)
+              ? 'active' as const
+              : 'not_started' as const
+          }));
+        }
+
+        setQuizzes(quizzesWithStatus);
       } catch (error) {
         console.error("Error fetching quizzes:", error);
         toast.error("Failed to load quizzes");
@@ -74,7 +105,36 @@ const Quizzes = () => {
     };
 
     fetchQuizzes();
-  }, [currentUser.id, userType]);
+  }, [currentUser?.id, userType]);
+
+  const getStatusBadge = (status?: string) => {
+    switch (status) {
+      case 'completed':
+        return (
+          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+            Completed
+          </Badge>
+        );
+      case 'active':
+        return (
+          <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+            Active
+          </Badge>
+        );
+      case 'not_started':
+        return (
+          <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
+            Not Started
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="bg-edu-gray text-edu-primary">
+            Quiz
+          </Badge>
+        );
+    }
+  };
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -144,9 +204,7 @@ const Quizzes = () => {
                         <span>Subject: {quiz.subject?.name || 'Unknown'}</span>
                       </div>
                       
-                      <Badge variant="outline" className="bg-edu-gray text-edu-primary">
-                        Quiz
-                      </Badge>
+                      {getStatusBadge(quiz.status)}
                     </div>
                   </CardContent>
                 </Card>
