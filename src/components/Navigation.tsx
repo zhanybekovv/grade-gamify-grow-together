@@ -2,7 +2,7 @@
 import { useAuth } from "../context/AuthContext";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { User, Book, Award, LogOut } from "lucide-react";
+import { User, Book, LogOut } from "lucide-react";
 
 const Navigation = () => {
   const { currentUser, logout } = useAuth();
@@ -50,10 +50,7 @@ const Navigation = () => {
                   <Link to="/explore" className="text-gray-700 hover:text-edu-primary font-medium">
                     Explore
                   </Link>
-                  {/* <Link to="/leaderboards" className="text-gray-700 hover:text-edu-primary font-medium">
-                    Leaderboards
-                  </Link> */}
-                   <Link to="/subjects" className="text-gray-700 hover:text-edu-primary font-medium">
+                  <Link to="/subjects" className="text-gray-700 hover:text-edu-primary font-medium">
                     My Subjects
                   </Link>
                 </>

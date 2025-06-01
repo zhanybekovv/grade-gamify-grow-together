@@ -105,12 +105,6 @@ const StudentActions = ({
               </div>
             )}
           </div>
-        ) : !activeSession ? (
-          <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
-            <p className="text-sm text-gray-600">
-              Quiz session is not currently active
-            </p>
-          </div>
         ) : hasSubmitted ? (
           <Button 
             variant="outline" 
@@ -119,7 +113,7 @@ const StudentActions = ({
           >
             View Results
           </Button>
-        ) : (
+        ) : activeSession ? (
           <Dialog>
             <DialogTrigger asChild>
               <Button className="w-full">
@@ -144,6 +138,15 @@ const StudentActions = ({
               </div>
             </DialogContent>
           </Dialog>
+        ) : (
+          <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <p className="text-sm text-gray-600 mb-2">
+              Quiz session is not currently active
+            </p>
+            <p className="text-xs text-gray-500">
+              You can view quiz information, but cannot take it until the teacher starts a session
+            </p>
+          </div>
         )}
       </CardContent>
     </Card>
