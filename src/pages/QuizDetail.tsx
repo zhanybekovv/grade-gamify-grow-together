@@ -403,7 +403,7 @@ const QuizDetail = () => {
                         </DialogHeader>
                         <div className="flex justify-end gap-2 mt-4">
                           <Button variant="outline">Cancel</Button>
-                          <Button onClick={() => navigate(`/take-quiz/${id}`)}>
+                          <Button onClick={() => navigate(`/quizzes/${id}/take`)}>
                             Start Quiz
                           </Button>
                         </div>
