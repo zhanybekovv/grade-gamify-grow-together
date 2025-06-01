@@ -3,7 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Users, Play } from "lucide-react";
+import { FileText, Users, Play, Trophy, Medal, Award } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -46,6 +46,13 @@ interface EnrollmentStatus {
   enrollmentId?: string;
 }
 
+interface LeaderboardEntry {
+  student_name: string;
+  student_id: string;
+  score: number;
+  submitted_at: string;
+}
+
 const QuizDetail = () => {
   const { id } = useParams<{ id: string }>();
   const { currentUser } = useAuth();
@@ -63,6 +70,7 @@ const QuizDetail = () => {
   });
   const [isQuizActive, setIsQuizActive] = useState(false);
   const [isConfirmStartOpen, setIsConfirmStartOpen] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
   useEffect(() => {
     const fetchQuizDetails = async () => {
@@ -181,6 +189,44 @@ const QuizDetail = () => {
           }
         }
 
+        // Fetch quiz leaderboard
+        const { data: leaderboardData, error: leaderboardError } = await supabase
+          .from("quiz_submissions")
+          .select(`
+            score,
+            submitted_at,
+            student_id,
+            profiles!inner (
+              name
+            )
+          `)
+          .eq("quiz_id", id)
+          .order('score', { ascending: false })
+          .limit(10);
+
+        if (leaderboardError) throw leaderboardError;
+
+        // Process leaderboard data to get best score per student
+        const leaderboardMap = new Map<string, LeaderboardEntry>();
+        
+        leaderboardData?.forEach((submission: any) => {
+          const existing = leaderboardMap.get(submission.student_id);
+          
+          if (!existing || submission.score > existing.score) {
+            leaderboardMap.set(submission.student_id, {
+              student_name: submission.profiles.name,
+              student_id: submission.student_id,
+              score: submission.score || 0,
+              submitted_at: submission.submitted_at,
+            });
+          }
+        });
+
+        const processedLeaderboard = Array.from(leaderboardMap.values())
+          .sort((a, b) => b.score - a.score);
+
+        setLeaderboard(processedLeaderboard);
+
       } catch (error) {
         console.error("Error fetching quiz details:", error);
         toast.error("Failed to load quiz details");
@@ -275,6 +321,19 @@ const QuizDetail = () => {
     } catch (error) {
       console.error("Error starting quiz:", error);
       toast.error("Failed to start quiz");
+    }
+  };
+
+  const getRankIcon = (index: number) => {
+    switch (index) {
+      case 0:
+        return <Trophy className="h-4 w-4 text-yellow-500" />;
+      case 1:
+        return <Medal className="h-4 w-4 text-gray-400" />;
+      case 2:
+        return <Award className="h-4 w-4 text-amber-600" />;
+      default:
+        return <span className="h-4 w-4 flex items-center justify-center text-xs font-semibold text-gray-500">#{index + 1}</span>;
     }
   };
 
@@ -401,7 +460,7 @@ const QuizDetail = () => {
         </div>
 
         <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2">
+          <div className="md:col-span-2 space-y-6">
             <Card>
               <CardHeader>
                 <CardTitle>Quiz Details</CardTitle>
@@ -461,6 +520,54 @@ const QuizDetail = () => {
                     </div>
                   )}
                 </div>
+              </CardContent>
+            </Card>
+
+            {/* Quiz Leaderboard */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Trophy className="h-5 w-5 text-yellow-500" />
+                  Quiz Leaderboard
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {leaderboard.length === 0 ? (
+                  <p className="text-gray-500 text-center py-8">No submissions yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {leaderboard.map((entry, index) => (
+                      <div
+                        key={entry.student_id}
+                        className={`flex items-center justify-between p-3 rounded-lg border ${
+                          entry.student_id === currentUser?.id 
+                            ? 'bg-blue-50 border-blue-200' 
+                            : 'bg-white'
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          {getRankIcon(index)}
+                          <div>
+                            <p className="font-medium">{entry.student_name}</p>
+                            <p className="text-xs text-gray-500">
+                              {new Date(entry.submitted_at).toLocaleDateString()}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant={index < 3 ? "default" : "outline"}>
+                            {entry.score} points
+                          </Badge>
+                          {entry.student_id === currentUser?.id && (
+                            <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                              You
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
