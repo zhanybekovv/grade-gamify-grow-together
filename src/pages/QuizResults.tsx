@@ -148,9 +148,8 @@ const QuizResults = () => {
           .eq("quiz_id", id)
           .order("score", { ascending: false })
           .limit(10);
-        console.log('leaderboard', leaderboardData);
 
-        if (submissionsError) {
+          if (submissionsError) {
           console.error("Error fetching submissions:", submissionsError);
         } else if (submissionsData && submissionsData.length > 0) {
           // Get student IDs
