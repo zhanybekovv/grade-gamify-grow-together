@@ -150,9 +150,10 @@ const QuizResults = () => {
             student_id,
             profiles!inner(name)
           `)
-          .eq("quiz_id", id)
-          .order("score", { ascending: false })
-          .limit(10);
+          // .eq("quiz_id", id)
+          // .order("score", { ascending: false })
+          // .limit(10);
+        console.log('leaderboard', leaderboardData);
 
         if (!leaderboardError && leaderboardData) {
           const formattedLeaderboard = leaderboardData.map((entry: any) => ({

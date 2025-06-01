@@ -250,7 +250,7 @@ const TakeQuiz = () => {
       }
 
       toast.success("Quiz submitted successfully!");
-      navigate(`/quiz-results/${quiz.id}`);
+      navigate(`/quizzes/${quiz.id}/results`);
 
     } catch (error) {
       console.error("Error submitting quiz:", error);

@@ -114,7 +114,7 @@ const StudentActions = ({
         ) : hasSubmitted ? (
           <Button 
             variant="outline" 
-            onClick={() => navigate(`/quiz-results/${quiz.id}`)}
+            onClick={() => navigate(`/quizzes/${quiz.id}/results`)}
             className="w-full"
           >
             View Results
