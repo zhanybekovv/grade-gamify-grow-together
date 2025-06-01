@@ -1,23 +1,22 @@
+
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import Navigation from "@/components/Navigation";
 import { useAuth } from "@/context/AuthContext";
-import { FileText, Users, Play, Trophy, Medal, Award } from "lucide-react";
-import { toast } from "sonner";
-
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { 
   Dialog, 
-  DialogContent, 
-  DialogDescription, 
-  DialogHeader, 
-  DialogTitle, 
-  DialogTrigger,
-  DialogFooter
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger
 } from "@/components/ui/dialog";
+import { Play, Clock, Users, Award, Trophy, Medal } from "lucide-react";
+import { toast } from "sonner";
 
 interface Quiz {
   id: string;
@@ -28,8 +27,7 @@ interface Quiz {
   subject: {
     name: string;
     teacher_id: string;
-  }
-  is_active?: boolean;
+  };
 }
 
 interface Question {
@@ -43,7 +41,6 @@ interface Question {
 interface EnrollmentStatus {
   isEnrolled: boolean;
   isPending: boolean;
-  enrollmentId?: string;
 }
 
 interface LeaderboardEntry {
@@ -55,30 +52,31 @@ interface LeaderboardEntry {
 
 const QuizDetail = () => {
   const { id } = useParams<{ id: string }>();
-  const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
   const [quiz, setQuiz] = useState<Quiz | null>(null);
-  const [quizStatus, setQuizStatus] = useState<string>("not_started");
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [enrolledStudents, setEnrolledStudents] = useState<number>(0);
-  const [pendingStudents, setPendingStudents] = useState<number>(0);
-  const [isTeacher, setIsTeacher] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [isTeacher, setIsTeacher] = useState(false);
+  const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [submissionScore, setSubmissionScore] = useState<number | null>(null);
   const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus>({
     isEnrolled: false,
     isPending: false
   });
-  const [isQuizActive, setIsQuizActive] = useState(false);
-  const [isConfirmStartOpen, setIsConfirmStartOpen] = useState(false);
+  const [activeSession, setActiveSession] = useState<any>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
 
-  useEffect(() => {
-    const fetchQuizDetails = async () => {
-      setLoading(true);
-      try {
-        if (!id || !currentUser?.id) return;
+  const userType = currentUser?.user_metadata?.type || 'student';
 
-        // Fetch quiz details
+  useEffect(() => {
+    const fetchQuizData = async () => {
+      if (!id || !currentUser) return;
+
+      try {
+        setLoading(true);
+
+        // Fetch quiz with subject details
         const { data: quizData, error: quizError } = await supabase
           .from("quizzes")
           .select(`
@@ -88,239 +86,149 @@ const QuizDetail = () => {
           .eq("id", id)
           .single();
 
-        const { data: existingSubmission, error: submissionError } = await supabase
-          .from("quiz_submissions")
-          .select("id")
-          .eq("quiz_id", id)
-          .eq("student_id", currentUser.id)
-          .maybeSingle();
-
-        if (submissionError) throw submissionError;
-
-        if (existingSubmission) {
-          toast.success("Quiz already completed. Redirecting to results...");
-          navigate(`/quizzes/${id}/results`);
-          return;
-        }
-
         if (quizError) throw quizError;
+        setQuiz(quizData);
 
-        // Check if quiz is active
-        // Use the raw fetch method to access tables not in the generated types
-        const { data: activeSessionData, error: activeSessionError } = await supabase
-          .from('active_quiz_sessions')
-          .select('*')
-          .eq('quiz_id', id)
-          .maybeSingle();
-          
-        if (activeSessionError) console.error("Error checking active sessions:", activeSessionError);
-        
-        setQuiz({
-          ...quizData,
-          is_active: !!activeSessionData
-        });
-        let quizStatus = 'not_started'
-        if (activeSessionData) {
-          quizStatus = activeSessionData.status === 'active' ? 'active' : 'completed';
-        }
-
-        setQuizStatus(quizStatus);
-        setIsQuizActive(!!activeSessionData);
-        
         // Check if current user is the teacher
-        if (currentUser?.id && quizData.subject.teacher_id === currentUser.id) {
+        if (quizData.subject.teacher_id === currentUser.id) {
           setIsTeacher(true);
         }
 
-        // Fetch questions for this quiz
+        // Fetch questions
         const { data: questionsData, error: questionsError } = await supabase
           .from("questions")
           .select("*")
           .eq("quiz_id", id);
 
         if (questionsError) throw questionsError;
-        
-        // Transform the questions data to match our Question interface
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const transformedQuestions: Question[] = questionsData.map((question: any) => ({
-          id: question.id,
-          text: question.text,
-          options: Array.isArray(question.options) ? question.options : JSON.parse(question.options || '[]'),
-          correct_option_index: question.correct_option_index,
-          points: question.points || 0
+
+        const formattedQuestions = questionsData.map((q: any) => ({
+          ...q,
+          options: Array.isArray(q.options) ? q.options : JSON.parse(q.options || '[]')
         }));
-        
-        setQuestions(transformedQuestions);
 
-        // Check enrollment counts
-        const { data: enrolledCount, error: enrolledError } = await supabase
-          .from("quiz_enrollments")
-          .select("*", { count: "exact" })
-          .eq("quiz_id", id)
-          .eq("status", "approved");
+        setQuestions(formattedQuestions);
 
-        if (enrolledError) throw enrolledError;
-        setEnrolledStudents(enrolledCount?.length || 0);
-
-        const { data: pendingCount, error: pendingError } = await supabase
-          .from("quiz_enrollments")
-          .select("*", { count: "exact" })
-          .eq("quiz_id", id)
-          .eq("status", "pending");
-
-        if (pendingError) throw pendingError;
-        setPendingStudents(pendingCount?.length || 0);
-
-        // Check enrollment status for students
-        if (currentUser?.id && !isTeacher) {
-          const { data: enrollmentData, error: enrollmentError } = await supabase
-            .from("quiz_enrollments")
-            .select("*")
+        // Check if student has submitted
+        if (userType === 'student') {
+          const { data: submissionData } = await supabase
+            .from("quiz_submissions")
+            .select("score")
             .eq("quiz_id", id)
             .eq("student_id", currentUser.id)
-            .single();
+            .maybeSingle();
 
-          if (!enrollmentError && enrollmentData) {
+          if (submissionData) {
+            setHasSubmitted(true);
+            setSubmissionScore(submissionData.score);
+          }
+
+          // Check enrollment status
+          const { data: enrollmentData } = await supabase
+            .from("subject_enrollments")
+            .select("status")
+            .eq("subject_id", quizData.subject_id)
+            .eq("student_id", currentUser.id)
+            .maybeSingle();
+
+          if (enrollmentData) {
             setEnrollmentStatus({
               isEnrolled: enrollmentData.status === 'approved',
-              isPending: enrollmentData.status === 'pending',
-              enrollmentId: enrollmentData.id
+              isPending: enrollmentData.status === 'pending'
             });
           }
         }
 
-        // Fetch quiz leaderboard
-        const { data: leaderboardData, error: leaderboardError } = await supabase
-          .from("quiz_submissions")
-          .select(`
-            score,
-            submitted_at,
-            student_id,
-            profiles!inner (
-              name
-            )
-          `)
+        // Check for active quiz session
+        const { data: sessionData } = await supabase
+          .from("active_quiz_sessions")
+          .select("*")
           .eq("quiz_id", id)
-          .order('score', { ascending: false })
-          .limit(10);
+          .eq("status", "active")
+          .maybeSingle();
 
-        if (leaderboardError) throw leaderboardError;
+        setActiveSession(sessionData);
 
-        // Process leaderboard data to get best score per student
-        const leaderboardMap = new Map<string, LeaderboardEntry>();
-        
-        leaderboardData?.forEach((submission: any) => {
-          const existing = leaderboardMap.get(submission.student_id);
-          
-          if (!existing || submission.score > existing.score) {
-            leaderboardMap.set(submission.student_id, {
-              student_name: submission.profiles.name,
-              student_id: submission.student_id,
-              score: submission.score || 0,
-              submitted_at: submission.submitted_at,
-            });
+        // Fetch leaderboard data for completed quizzes
+        if (hasSubmitted || isTeacher) {
+          const { data: leaderboardData, error: leaderboardError } = await supabase
+            .from("quiz_submissions")
+            .select(`
+              score,
+              submitted_at,
+              student_id,
+              profiles!inner(name)
+            `)
+            .eq("quiz_id", id)
+            .order("score", { ascending: false })
+            .limit(10);
+
+          if (!leaderboardError && leaderboardData) {
+            const formattedLeaderboard = leaderboardData.map((entry: any) => ({
+              student_name: entry.profiles.name,
+              student_id: entry.student_id,
+              score: entry.score,
+              submitted_at: entry.submitted_at
+            }));
+            setLeaderboard(formattedLeaderboard);
           }
-        });
-
-        const processedLeaderboard = Array.from(leaderboardMap.values())
-          .sort((a, b) => b.score - a.score);
-
-        setLeaderboard(processedLeaderboard);
+        }
 
       } catch (error) {
-        console.error("Error fetching quiz details:", error);
+        console.error("Error fetching quiz data:", error);
         toast.error("Failed to load quiz details");
       } finally {
         setLoading(false);
       }
     };
 
-    fetchQuizDetails();
-  }, [id, currentUser.id, isTeacher]);
+    fetchQuizData();
+  }, [id, currentUser, userType, hasSubmitted, isTeacher]);
 
-  const handleEnrollRequest = async () => {
+  const startQuizSession = async () => {
     try {
-      if (!currentUser || !id) return;
-
       const { error } = await supabase
-        .from("quiz_enrollments")
+        .from("active_quiz_sessions")
         .insert({
           quiz_id: id,
-          student_id: currentUser.id,
-          status: 'pending'
-        });
-
-      if (error) throw error;
-
-      setEnrollmentStatus({
-        isEnrolled: false,
-        isPending: true
-      });
-      
-      // Update pending count
-      setPendingStudents(prev => prev + 1);
-      
-      toast.success("Quiz enrollment request sent");
-    } catch (error) {
-      console.error("Error requesting enrollment:", error);
-      toast.error("Failed to send enrollment request");
-    }
-  };
-
-  const handleCancelRequest = async () => {
-    try {
-      if (!enrollmentStatus.enrollmentId) return;
-
-      const { error } = await supabase
-        .from("quiz_enrollments")
-        .delete()
-        .eq("id", enrollmentStatus.enrollmentId);
-
-      if (error) throw error;
-
-      setEnrollmentStatus({
-        isEnrolled: false,
-        isPending: false
-      });
-      
-      // Update pending count
-      setPendingStudents(prev => prev - 1);
-      
-      toast.success("Enrollment request cancelled");
-    } catch (error) {
-      console.error("Error cancelling enrollment:", error);
-      toast.error("Failed to cancel request");
-    }
-  };
-
-  const handleStartQuiz = async () => {
-    try {
-      if (!id || !currentUser) return;
-      
-      // Create an active quiz session
-      // Use the raw fetch method to access tables not in the generated types
-      const { error: sessionError } = await supabase
-        .from('active_quiz_sessions')
-        .insert({
-          quiz_id: id,
-          teacher_id: currentUser.id,
-          start_time: new Date().toISOString(),
+          teacher_id: currentUser?.id,
           status: "active"
         });
-        
-      if (sessionError) throw sessionError;
+
+      if (error) throw error;
+
+      toast.success("Quiz session started successfully");
       
-      // Update UI
-      setIsQuizActive(true);
-      setQuiz(prev => prev ? { ...prev, is_active: true } : null);
-      toast.success("Quiz has been started!");
-      setIsConfirmStartOpen(false);
-      
-      // Notify enrolled students (this would typically be done via realtime updates)
-      // For now, we'll just update our UI
+      // Refresh the active session data
+      const { data: sessionData } = await supabase
+        .from("active_quiz_sessions")
+        .select("*")
+        .eq("quiz_id", id)
+        .eq("status", "active")
+        .single();
+
+      setActiveSession(sessionData);
     } catch (error) {
-      console.error("Error starting quiz:", error);
-      toast.error("Failed to start quiz");
+      console.error("Error starting quiz session:", error);
+      toast.error("Failed to start quiz session");
+    }
+  };
+
+  const stopQuizSession = async () => {
+    try {
+      const { error } = await supabase
+        .from("active_quiz_sessions")
+        .update({ status: "ended", end_time: new Date().toISOString() })
+        .eq("quiz_id", id)
+        .eq("status", "active");
+
+      if (error) throw error;
+
+      toast.success("Quiz session ended successfully");
+      setActiveSession(null);
+    } catch (error) {
+      console.error("Error stopping quiz session:", error);
+      toast.error("Failed to stop quiz session");
     }
   };
 
@@ -333,7 +241,7 @@ const QuizDetail = () => {
       case 2:
         return <Award className="h-4 w-4 text-amber-600" />;
       default:
-        return <span className="h-4 w-4 flex items-center justify-center text-xs font-semibold text-gray-500">#{index + 1}</span>;
+        return <span className="text-sm font-semibold text-gray-500">#{index + 1}</span>;
     }
   };
 
@@ -367,290 +275,193 @@ const QuizDetail = () => {
     <div className="min-h-screen bg-gray-50">
       <Navigation />
       <main className="container mx-auto px-4 py-6">
-        <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">{quiz.title}</h1>
-            <p className="text-muted-foreground">{quiz.description}</p>
-            <p className="text-sm text-edu-primary mt-1">
-              Subject: {quiz.subject?.name || "Unknown"}
-            </p>
-          </div>
-          
-          <div className="flex gap-2">
-            {!isTeacher && (
-              <>
-                {enrollmentStatus.isEnrolled ? (
-                  <Badge className="bg-green-100 text-green-800 h-10 px-4 flex items-center">
-                    <Users size={16} className="mr-2" /> Enrolled
-                  </Badge>
-                ) : enrollmentStatus.isPending ? (
-                  <>
-                    <Badge className="bg-yellow-100 text-yellow-800 h-10 px-4 flex items-center">
-                      Pending Approval
-                    </Badge>
-                    <Button variant="outline" onClick={handleCancelRequest}>
-                      Cancel Request
-                    </Button>
-                  </>
-                ) : (
-                  <Dialog>
-                    <DialogTrigger asChild>
-                      <Button variant="outline">Enroll in Quiz</Button>
-                    </DialogTrigger>
-                    <DialogContent>
-                      <DialogHeader>
-                        <DialogTitle>Enroll in {quiz.title}</DialogTitle>
-                        <DialogDescription>
-                          Your request will be sent to the teacher for approval.
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="flex justify-end gap-2 mt-4">
-                        <Button 
-                          variant="outline" 
-                          onClick={() => {}}
-                        >
-                          Cancel
-                        </Button>
-                        <Button onClick={handleEnrollRequest}>Send Request</Button>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-                )}
-              </>
-            )}
-
-            {isTeacher && (
-              <Dialog open={isConfirmStartOpen} onOpenChange={setIsConfirmStartOpen}>
-                <DialogTrigger asChild>
-                  <Button 
-                    className="bg-green-600 hover:bg-green-700"
-                    disabled={enrolledStudents === 0 || isQuizActive}
-                  >
-                    <Play size={16} className="mr-2" /> 
-                    {isQuizActive ? "Quiz Active" : "Start Quiz"}
-                  </Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Start Quiz</DialogTitle>
-                    <DialogDescription>
-                      Are you sure you want to start this quiz for all enrolled students?
-                      {pendingStudents > 0 && (
-                        <div className="mt-2 text-yellow-600">
-                          Note: There are still {pendingStudents} pending enrollment requests.
-                        </div>
-                      )}
-                    </DialogDescription>
-                  </DialogHeader>
-                  <DialogFooter className="mt-4">
-                    <Button 
-                      variant="outline" 
-                      onClick={() => setIsConfirmStartOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button onClick={handleStartQuiz}>
-                      Start Quiz
-                    </Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold">{quiz.title}</h1>
+          <p className="text-muted-foreground">{quiz.description}</p>
+          <p className="text-sm text-muted-foreground mt-1">Subject: {quiz.subject.name}</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-3">
-          <div className="md:col-span-2 space-y-6">
-            <Card>
-              <CardHeader>
-                <CardTitle>Quiz Details</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Description</h3>
-                    <p>{quiz.description}</p>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Number of Questions</h3>
-                    <p>{questions.length}</p>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Total Points</h3>
-                    <p>
-                      {questions.reduce((sum, q) => sum + (q.points || 0), 0)} points
-                    </p>
-                  </div>
-
-                  {isTeacher && (
-                    <div className="pt-4">
-                      <h3 className="text-sm font-medium text-muted-foreground mb-2">Preview Questions</h3>
-                      {questions.length > 0 ? (
-                        <div className="space-y-3 max-h-96 overflow-y-auto">
-                          {questions.map((question, index) => (
-                            <Card key={question.id} className="shadow-sm">
-                              <CardContent className="p-4">
-                                <p className="font-medium mb-2">
-                                  {index + 1}. {question.text}
-                                </p>
-                                <div className="pl-4 space-y-1">
-                                  {question.options.map((option, optIndex) => (
-                                    <div key={optIndex} className="flex items-center">
-                                      <span className={optIndex === question.correct_option_index ? "text-green-600 font-medium" : ""}>
-                                        {String.fromCharCode(65 + optIndex)}. {option}
-                                      </span>
-                                      {optIndex === question.correct_option_index && (
-                                        <Badge className="ml-2 bg-green-100 text-green-800">Correct</Badge>
-                                      )}
-                                    </div>
-                                  ))}
-                                </div>
-                                <div className="mt-2 text-sm text-right text-muted-foreground">
-                                  {question.points} points
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </div>
-                      ) : (
-                        <p className="text-muted-foreground">No questions added yet</p>
-                      )}
-                    </div>
-                  )}
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Quiz Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users size={20} />
+                Quiz Information
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Questions:</span>
+                <Badge variant="outline">{questions.length}</Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Total Points:</span>
+                <Badge variant="outline">
+                  {questions.reduce((sum, q) => sum + q.points, 0)}
+                </Badge>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted-foreground">Created:</span>
+                <span className="text-sm">{new Date(quiz.created_at).toLocaleDateString()}</span>
+              </div>
+              
+              {activeSession && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Status:</span>
+                  <Badge className="bg-green-100 text-green-800">
+                    <Clock size={14} className="mr-1" />
+                    Active Session
+                  </Badge>
                 </div>
-              </CardContent>
-            </Card>
+              )}
 
-            {/* Quiz Leaderboard */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Trophy className="h-5 w-5 text-yellow-500" />
-                  Quiz Leaderboard
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {leaderboard.length === 0 ? (
-                  <p className="text-gray-500 text-center py-8">No submissions yet</p>
-                ) : (
-                  <div className="space-y-3">
-                    {leaderboard.map((entry, index) => (
-                      <div
-                        key={entry.student_id}
-                        className={`flex items-center justify-between p-3 rounded-lg border ${
-                          entry.student_id === currentUser?.id 
-                            ? 'bg-blue-50 border-blue-200' 
-                            : 'bg-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          {getRankIcon(index)}
-                          <div>
-                            <p className="font-medium">{entry.student_name}</p>
-                            <p className="text-xs text-gray-500">
-                              {new Date(entry.submitted_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={index < 3 ? "default" : "outline"}>
-                            {entry.score} points
-                          </Badge>
-                          {entry.student_id === currentUser?.id && (
-                            <Badge variant="outline" className="bg-blue-100 text-blue-800">
-                              You
-                            </Badge>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-          
-          <div className="md:col-span-1">
-            <Card>
-              <CardHeader>
-                <CardTitle>Quiz Status</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Status</h3>
-                    <Badge className={isQuizActive ? "bg-green-100 text-green-800" : "bg-blue-100 text-blue-800"}>
-                      {quizStatus === 'active' 
-                        ? "Active" : quizStatus === 'not_started' ? "Not Started" : 'completed'}
-                    </Badge>
-                  </div>
-                  
-                  <div>
-                    <h3 className="text-sm font-medium text-muted-foreground mb-1">Enrolled Students</h3>
-                    <p>{enrolledStudents}</p>
-                  </div>
-                  
-                  {isTeacher && pendingStudents > 0 && (
-                    <div>
-                      <h3 className="text-sm font-medium text-muted-foreground mb-1">Pending Enrollments</h3>
-                      <div className="flex items-center">
-                        <p>{pendingStudents}</p>
-                        <Button 
-                          variant="link" 
-                          className="text-edu-primary ml-2 p-0 h-auto" 
-                          onClick={() => navigate("/requests")}
-                        >
-                          View Requests
-                        </Button>
-                      </div>
-                    </div>
+              {hasSubmitted && submissionScore !== null && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted-foreground">Your Score:</span>
+                  <Badge className="bg-blue-100 text-blue-800">
+                    {submissionScore} points
+                  </Badge>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Actions */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+              <CardDescription>
+                {isTeacher ? "Manage your quiz" : "Take the quiz or view results"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {isTeacher ? (
+                <>
+                  {!activeSession ? (
+                    <Button onClick={startQuizSession} className="w-full">
+                      <Play size={18} className="mr-2" />
+                      Start Quiz Session
+                    </Button>
+                  ) : (
+                    <Button onClick={stopQuizSession} variant="destructive" className="w-full">
+                      <Clock size={18} className="mr-2" />
+                      End Quiz Session
+                    </Button>
                   )}
                   
-                  {!isTeacher && (
-                    <div className="pt-4">
-                      <p className="text-sm text-muted-foreground">
-                        {enrollmentStatus.isEnrolled 
-                          ? isQuizActive && quizStatus === 'active'
-                            ? "This quiz is currently active! You can take it now."
-                            : isQuizActive && quizStatus === 'completed'
-                              ? "This quiz has been completed. You can review your results."
-                            : "You're enrolled in this quiz! Wait for the teacher to start it."
-                          : enrollmentStatus.isPending
-                          ? "Your enrollment request is pending approval."
-                          : "Enroll to participate in this quiz."}
+                  <Button 
+                    variant="outline" 
+                    onClick={() => navigate(`/monitor-quiz/${id}`)}
+                    className="w-full"
+                  >
+                    <Users size={18} className="mr-2" />
+                    Monitor Quiz
+                  </Button>
+                </>
+              ) : (
+                <>
+                  {!enrollmentStatus.isEnrolled ? (
+                    <div className="text-center p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <p className="text-sm text-yellow-800">
+                        {enrollmentStatus.isPending 
+                          ? "Your enrollment request is pending approval"
+                          : "You need to be enrolled in this subject to take the quiz"
+                        }
                       </p>
                     </div>
-                  )}
-
-                  {isTeacher && isQuizActive && quizStatus === 'active' && (
-                    <div className="mt-6">
-                      <Button 
-                        className="w-full"
-                        variant="outline"
-                        onClick={() => navigate(`/quizzes/${id}/monitor`)}
-                      >
-                        Monitor Quiz Progress
-                      </Button>
+                  ) : !activeSession ? (
+                    <div className="text-center p-4 bg-gray-50 rounded-lg border border-gray-200">
+                      <p className="text-sm text-gray-600">
+                        Quiz session is not currently active
+                      </p>
                     </div>
+                  ) : hasSubmitted ? (
+                    <Button 
+                      variant="outline" 
+                      onClick={() => navigate(`/quiz-results/${id}`)}
+                      className="w-full"
+                    >
+                      View Results
+                    </Button>
+                  ) : (
+                    <Dialog>
+                      <DialogTrigger asChild>
+                        <Button className="w-full">
+                          <Play size={18} className="mr-2" />
+                          Take Quiz
+                        </Button>
+                      </DialogTrigger>
+                      <DialogContent>
+                        <DialogHeader>
+                          <DialogTitle>Start Quiz: {quiz.title}</DialogTitle>
+                          <DialogDescription>
+                            This quiz has {questions.length} questions worth a total of{" "}
+                            {questions.reduce((sum, q) => sum + q.points, 0)} points.
+                            Make sure you have a stable internet connection.
+                          </DialogDescription>
+                        </DialogHeader>
+                        <div className="flex justify-end gap-2 mt-4">
+                          <Button variant="outline">Cancel</Button>
+                          <Button onClick={() => navigate(`/take-quiz/${id}`)}>
+                            Start Quiz
+                          </Button>
+                        </div>
+                      </DialogContent>
+                    </Dialog>
                   )}
-
-                  {!isTeacher && isQuizActive && quizStatus === 'active' && enrollmentStatus.isEnrolled && (
-                    <div className="mt-6">
-                      <Button 
-                        className="w-full bg-green-600 hover:bg-green-700"
-                        onClick={() => navigate(`/quizzes/${id}/take`)}
-                      >
-                        Take Quiz Now
-                      </Button>
-                    </div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+                </>
+              )}
+            </CardContent>
+          </Card>
         </div>
+
+        {/* Leaderboard for completed quizzes */}
+        {(hasSubmitted || isTeacher) && leaderboard.length > 0 && (
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Trophy className="h-5 w-5 text-yellow-500" />
+                Quiz Leaderboard
+              </CardTitle>
+              <CardDescription>Top performers on this quiz</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {leaderboard.map((entry, index) => (
+                  <div
+                    key={entry.student_id}
+                    className={`flex items-center justify-between p-3 rounded-lg border ${
+                      entry.student_id === currentUser?.id 
+                        ? 'bg-blue-50 border-blue-200' 
+                        : 'bg-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      {getRankIcon(index)}
+                      <div>
+                        <p className="font-medium">{entry.student_name}</p>
+                        <p className="text-xs text-gray-500">
+                          Submitted: {new Date(entry.submitted_at).toLocaleDateString()}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={index < 3 ? "default" : "outline"}>
+                        {entry.score} points
+                      </Badge>
+                      {entry.student_id === currentUser?.id && (
+                        <Badge variant="outline" className="bg-blue-100 text-blue-800">
+                          You
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </main>
     </div>
   );
