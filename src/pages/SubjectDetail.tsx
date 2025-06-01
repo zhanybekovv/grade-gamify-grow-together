@@ -33,6 +33,7 @@ interface Quiz {
   subject_id: string;
   created_at: string;
   status?: 'completed' | 'active' | 'not_started';
+  isActive?: boolean; // For teachers to see if quiz is currently active
 }
 
 interface EnrollmentStatus {
@@ -93,37 +94,54 @@ const SubjectDetail = () => {
 
         let quizzesWithStatus = quizzesData || [];
 
-        // For students, get quiz statuses
-        if (userType === 'student' && currentUser?.id && quizzesData?.length > 0) {
+        if (quizzesData?.length > 0) {
           const quizIds = quizzesData.map(quiz => quiz.id);
 
-          // Get completed quizzes
-          const { data: submissions } = await supabase
-            .from("quiz_submissions")
-            .select("quiz_id")
-            .eq("student_id", currentUser.id)
-            .in("quiz_id", quizIds);
+          // For students, get quiz statuses
+          if (userType === 'student' && currentUser?.id) {
+            // Get completed quizzes
+            const { data: submissions } = await supabase
+              .from("quiz_submissions")
+              .select("quiz_id")
+              .eq("student_id", currentUser.id)
+              .in("quiz_id", quizIds);
 
-          const completedQuizIds = submissions?.map(sub => sub.quiz_id) || [];
+            const completedQuizIds = submissions?.map(sub => sub.quiz_id) || [];
 
-          // Get active quiz sessions
-          const { data: activeSessions } = await supabase
-            .from("active_quiz_sessions")
-            .select("quiz_id")
-            .eq("status", "active")
-            .in("quiz_id", quizIds);
+            // Get active quiz sessions
+            const { data: activeSessions } = await supabase
+              .from("active_quiz_sessions")
+              .select("quiz_id")
+              .eq("status", "active")
+              .in("quiz_id", quizIds);
 
-          const activeQuizIds = activeSessions?.map(session => session.quiz_id) || [];
+            const activeQuizIds = activeSessions?.map(session => session.quiz_id) || [];
 
-          // Add status to each quiz
-          quizzesWithStatus = quizzesData.map(quiz => ({
-            ...quiz,
-            status: completedQuizIds.includes(quiz.id) 
-              ? 'completed' as const
-              : activeQuizIds.includes(quiz.id)
-              ? 'active' as const
-              : 'not_started' as const
-          }));
+            // Add status to each quiz for students
+            quizzesWithStatus = quizzesData.map(quiz => ({
+              ...quiz,
+              status: completedQuizIds.includes(quiz.id) 
+                ? 'completed' as const
+                : activeQuizIds.includes(quiz.id)
+                ? 'active' as const
+                : 'not_started' as const
+            }));
+          } else if (userType === 'teacher') {
+            // For teachers, just check if quiz is currently active
+            const { data: activeSessions } = await supabase
+              .from("active_quiz_sessions")
+              .select("quiz_id")
+              .eq("status", "active")
+              .in("quiz_id", quizIds);
+
+            const activeQuizIds = activeSessions?.map(session => session.quiz_id) || [];
+
+            // Add isActive flag for teachers
+            quizzesWithStatus = quizzesData.map(quiz => ({
+              ...quiz,
+              isActive: activeQuizIds.includes(quiz.id)
+            }));
+          }
         }
 
         setQuizzes(quizzesWithStatus);
@@ -156,32 +174,50 @@ const SubjectDetail = () => {
     fetchSubjectAndQuizzes();
   }, [id, currentUser, isTeacher, userType]);
 
-  const getStatusBadge = (status?: string) => {
-    switch (status) {
-      case 'completed':
-        return (
-          <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
-            Completed
-          </Badge>
-        );
-      case 'active':
+  const getStatusBadge = (quiz: Quiz) => {
+    // For students, show completion status
+    if (userType === 'student') {
+      switch (quiz.status) {
+        case 'completed':
+          return (
+            <Badge variant="outline" className="bg-green-100 text-green-700 border-green-300">
+              Completed
+            </Badge>
+          );
+        case 'active':
+          return (
+            <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
+              Active
+            </Badge>
+          );
+        case 'not_started':
+          return (
+            <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
+              Not Started
+            </Badge>
+          );
+        default:
+          return (
+            <Badge variant="outline" className="bg-edu-gray text-edu-primary">
+              Quiz
+            </Badge>
+          );
+      }
+    } else {
+      // For teachers, show if quiz is currently active for students
+      if (quiz.isActive) {
         return (
           <Badge variant="outline" className="bg-blue-100 text-blue-700 border-blue-300">
-            Active
+            Active Session
           </Badge>
         );
-      case 'not_started':
-        return (
-          <Badge variant="outline" className="bg-gray-100 text-gray-700 border-gray-300">
-            Not Started
-          </Badge>
-        );
-      default:
+      } else {
         return (
           <Badge variant="outline" className="bg-edu-gray text-edu-primary">
             Quiz
           </Badge>
         );
+      }
     }
   };
 
@@ -363,7 +399,7 @@ const SubjectDetail = () => {
                           <div className="text-xs text-muted-foreground">
                             {new Date(quiz.created_at).toLocaleDateString()}
                           </div>
-                          {getStatusBadge(quiz.status)}
+                          {getStatusBadge(quiz)}
                         </CardContent>
                       </Card>
                     </Link>
@@ -381,7 +417,7 @@ const SubjectDetail = () => {
                         <div className="text-xs text-muted-foreground">
                           {new Date(quiz.created_at).toLocaleDateString()}
                         </div>
-                        {getStatusBadge(quiz.status)}
+                        {getStatusBadge(quiz)}
                       </CardContent>
                     </Card>
                   );
